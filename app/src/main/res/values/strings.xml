@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Friendar</string>
+
+    <string name="home_find">Find my friend</string>
+    <string name="home_hint">Your friend taps the same button on their phone.</string>
+    <string name="permission_needed">Friendar needs the Nearby devices permission to find your friend.</string>
+    <string name="open_settings">Open settings</string>
+
+    <string name="status_looking">Looking for your friend</string>
+    <string name="status_measuring">Measuring</string>
+    <string name="status_closer">Getting closer</string>
+    <string name="status_farther">Getting farther</string>
+    <string name="status_walk">Walk a few steps to see which way is closer</string>
+    <string name="status_sweep">Sweep the back of the phone around the room</string>
+    <string name="status_gps">Direction is approximate. Walk that way and watch the distance.</string>
+    <string name="status_tilt">Hold the phone upright and aim its back at your friend</string>
+    <string name="status_aim">Aim the back of the phone at your friend</string>
+    <string name="status_follow">Follow the arrow</string>
+    <string name="status_here">Right here</string>
+    <string name="status_failed">Something went wrong. Tap Stop and try again.</string>
+
+    <string name="hint_waiting">Still looking. Make sure your friend has started searching too.</string>
+    <string name="hint_blocked">Precise ranging needs a clear line between the phones. Bodies, boxes and shelves block it.</string>
+
+    <string name="chip_arrow">Arrow</string>
+    <string name="chip_map">Map</string>
+
+    <string name="via_wifi">Measured through walls</string>
+    <string name="via_bluetooth">Rough estimate</string>
+    <string name="above_you">above you</string>
+    <string name="below_you">below you</string>
+
+    <string name="map_north">N</string>
+    <string name="map_no_position">No position yet</string>
+    <string name="map_note_gps_direction">Direction comes from GPS, so it is approximate.</string>
+    <string name="map_note_gps_only">GPS only. Indoors it can be off by %1$s or more.</string>
+    <string name="map_note_ring">Your friend is somewhere on the dashed ring.</string>
+    <string name="map_note_waiting">Waiting for a position.</string>
+
+    <string name="settings_show">Settings</string>
+    <string name="settings_hide">Hide settings</string>
+    <string name="flip_arrow">Flip arrow left and right</string>
+    <string name="debug_info">Debug info</string>
+    <string name="stop">Stop</string>
+
+    <string name="link_lost">Lost the Bluetooth link. Searching again.</string>
+    <string name="uwb_not_starting">Precise ranging isn\'t starting. Using Bluetooth signal.</string>
+    <string name="uwb_no_hardware">This phone doesn\'t report UWB hardware</string>
+    <string name="uwb_off">UWB is switched off or restricted on this phone</string>
+    <string name="peer_no_uwb">The other phone has no UWB available</string>
+
+    <string name="ble_turn_on">Turn Bluetooth on</string>
+    <string name="ble_unavailable">Bluetooth unavailable</string>
+    <string name="ble_advertising_unavailable">Bluetooth advertising unavailable</string>
+    <string name="ble_advertising_failed">Couldn\'t start advertising (%1$d)</string>
+    <string name="ble_service_failed">Couldn\'t start Bluetooth service (%1$d)</string>
+    <string name="ble_scanning_unavailable">Bluetooth scanning unavailable</string>
+    <string name="ble_scan_failed">Couldn\'t scan (%1$d)</string>
+
+    <string name="notification_channel">Searching</string>
+    <string name="notification_text">Looking for your friend</string>
+</resources>

@@ -1,4 +1,4 @@
-package com.friendar.locator
+package io.github.dancommitsgit.friendar
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
@@ -78,7 +78,7 @@ class BleHost(private val context: Context, private val id: Int, private val lis
     fun start() {
         val adapter = manager?.adapter
         if (adapter == null || !adapter.isEnabled) {
-            listener.onError("Turn Bluetooth on")
+            listener.onError(context.getString(R.string.ble_turn_on))
             return
         }
         val ch = BluetoothGattCharacteristic(
@@ -97,7 +97,7 @@ class BleHost(private val context: Context, private val id: Int, private val lis
         service.addCharacteristic(ch)
         val gattServer = manager.openGattServer(context, serverCallback)
         if (gattServer == null) {
-            listener.onError("Bluetooth unavailable")
+            listener.onError(context.getString(R.string.ble_unavailable))
             return
         }
         server = gattServer
@@ -130,7 +130,7 @@ class BleHost(private val context: Context, private val id: Int, private val lis
     private fun startAdvertising() {
         val advertiser = manager?.adapter?.bluetoothLeAdvertiser
         if (advertiser == null) {
-            listener.onError("Bluetooth advertising unavailable")
+            listener.onError(context.getString(R.string.ble_advertising_unavailable))
             return
         }
         val settings = AdvertiseSettings.Builder()
@@ -150,7 +150,7 @@ class BleHost(private val context: Context, private val id: Int, private val lis
             }
 
             override fun onStartFailure(errorCode: Int) {
-                listener.onError("Couldn't start advertising ($errorCode)")
+                listener.onError(context.getString(R.string.ble_advertising_failed, errorCode))
             }
         }
         advertiseCallback = callback
@@ -210,7 +210,7 @@ class BleHost(private val context: Context, private val id: Int, private val lis
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 startAdvertising()
             } else {
-                listener.onError("Couldn't start Bluetooth service ($status)")
+                listener.onError(context.getString(R.string.ble_service_failed, status))
             }
         }
 
@@ -324,19 +324,19 @@ class BleJoiner(private val context: Context, private val id: Int, private val l
     private fun scan() {
         val adapter = manager?.adapter
         if (adapter == null || !adapter.isEnabled) {
-            listener.onError("Turn Bluetooth on")
+            listener.onError(context.getString(R.string.ble_turn_on))
             return
         }
         val scanner = adapter.bluetoothLeScanner
         if (scanner == null) {
-            listener.onError("Bluetooth scanning unavailable")
+            listener.onError(context.getString(R.string.ble_scanning_unavailable))
             return
         }
         val callback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) = consider(result)
 
             override fun onScanFailed(errorCode: Int) {
-                listener.onError("Couldn't scan ($errorCode)")
+                listener.onError(context.getString(R.string.ble_scan_failed, errorCode))
             }
         }
         scanCallback = callback

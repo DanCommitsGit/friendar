@@ -5,12 +5,12 @@ plugins {
 }
 
 android {
-    namespace = "com.friendar.locator"
+    namespace = "io.github.dancommitsgit.friendar"
     compileSdk = 36
     buildToolsVersion = "35.0.0"
 
     defaultConfig {
-        applicationId = "com.friendar.locator"
+        applicationId = "io.github.dancommitsgit.friendar"
         minSdk = 31
         targetSdk = 34
         versionCode = 1

@@ -3,7 +3,27 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,24 L74,70 L54,60 L34,70 Z" />
+    <group
+        android:scaleX="0.66"
+        android:scaleY="0.66"
+        android:translateX="14.4"
+        android:translateY="14.4">
+        <path
+            android:fillColor="@color/ic_launcher_arrow"
+            android:pathData="M55.29,62.59 Q58.97,61.03 57.41,64.71 L42.85,99.07 Q41.29,102.75 39.94,98.99 L36.28,88.83 Q34.93,85.07 31.17,83.72 L21.01,80.06 Q17.25,78.71 20.93,77.15 Z" />
+        <path
+            android:strokeColor="@color/ic_launcher_friend"
+            android:strokeAlpha="0.4"
+            android:strokeWidth="3"
+            android:pathData="M104,38 A22,22 0 1 1 60,38 A22,22 0 1 1 104,38 Z" />
+        <path
+            android:fillColor="@color/ic_launcher_friend"
+            android:pathData="M97,38 A15,15 0 1 1 67,38 A15,15 0 1 1 97,38 Z" />
+        <path
+            android:fillColor="@color/ic_launcher_background"
+            android:pathData="M86,33 A4,4 0 1 1 78,33 A4,4 0 1 1 86,33 Z" />
+        <path
+            android:fillColor="@color/ic_launcher_background"
+            android:pathData="M76,50 Q74,50 74,48 A8,8 0 0 1 90,48 Q90,50 88,50 Z" />
+    </group>
 </vector>

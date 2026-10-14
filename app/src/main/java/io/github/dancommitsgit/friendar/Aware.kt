@@ -1,4 +1,4 @@
-package com.friendar.locator
+package io.github.dancommitsgit.friendar
 
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver

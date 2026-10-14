@@ -1,4 +1,4 @@
-package com.friendar.locator
+package io.github.dancommitsgit.friendar
 
 import kotlin.math.abs
 import kotlin.math.atan2

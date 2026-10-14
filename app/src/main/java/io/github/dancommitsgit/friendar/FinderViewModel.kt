@@ -1,4 +1,4 @@
-package com.friendar.locator
+package io.github.dancommitsgit.friendar
 
 import android.app.Application
 import android.content.Context
@@ -81,13 +81,17 @@ data class FinderState(
     /** Suggestion shown when a step is taking unusually long. */
     val hint: String? = null,
     val mirror: Boolean = true,
+    /** Show distances in meters instead of feet. */
+    val metric: Boolean = true,
+    /** Show measurement sources and raw readings. */
+    val debug: Boolean = false,
     val rawReading: String? = null,
     val log: List<String> = emptyList(),
 )
 
 class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, AwareListener {
     private val prefs = app.getSharedPreferences("settings", Context.MODE_PRIVATE)
-    private val _state = MutableStateFlow(FinderState(mirror = prefs.getBoolean(PREF_MIRROR, true)))
+    private val _state = MutableStateFlow(freshState())
     val state: StateFlow<FinderState> = _state.asStateFlow()
 
     private val distanceFilter = DistanceFilter()
@@ -161,7 +165,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         failedAttempts = 0
         rangingStarted = false
         workingControllerIsHost = null
-        _state.value = FinderState(phase = Phase.Waiting, mirror = prefs.getBoolean(PREF_MIRROR, true))
+        _state.value = freshState(Phase.Waiting)
         log("${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}")
         val pm = getApplication<Application>().packageManager
         log(
@@ -198,6 +202,27 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         _state.update { it.copy(mirror = value) }
     }
 
+    fun setMetric(value: Boolean) {
+        prefs.edit().putBoolean(PREF_METRIC, value).apply()
+        _state.update { it.copy(metric = value) }
+    }
+
+    fun setDebug(value: Boolean) {
+        prefs.edit().putBoolean(PREF_DEBUG, value).apply()
+        _state.update { it.copy(debug = value) }
+    }
+
+    private fun freshState(phase: Phase = Phase.Idle) = FinderState(
+        phase = phase,
+        mirror = prefs.getBoolean(PREF_MIRROR, true),
+        metric = prefs.getBoolean(PREF_METRIC, usesMetric()),
+        debug = prefs.getBoolean(PREF_DEBUG, false),
+    )
+
+    private fun usesMetric() = Locale.getDefault().country !in IMPERIAL_COUNTRIES
+
+    private fun string(id: Int) = getApplication<Application>().getString(id)
+
     fun stop() {
         closeLink()
         watchdogJob?.cancel()
@@ -219,7 +244,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         getApplication<Application>().stopService(
             Intent(getApplication(), LocatorService::class.java),
         )
-        _state.value = FinderState(mirror = prefs.getBoolean(PREF_MIRROR, true))
+        _state.value = freshState()
     }
 
     private fun startService() {
@@ -286,11 +311,10 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
     }
 
     private fun hintFor(s: FinderState): String? = when {
-        s.phase == Phase.Waiting ->
-            "No phone found yet. Your friend needs the app open with the button tapped."
+        s.phase == Phase.Waiting -> string(R.string.hint_waiting)
 
         s.phase == Phase.Ranging && s.uwbActive && s.distanceM == null && s.rssiDbm != null ->
-            "Precise ranging needs a clear line between the phones. Bodies, boxes and shelves block it."
+            string(R.string.hint_blocked)
 
         else -> null
     }
@@ -367,7 +391,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
                     if (message.attempt == attempt) onAttemptFailed("peer asked to retry")
 
                 is Message.Rssi -> onSignal(message.dbm)
-                Message.NoUwb -> useSignalStrengthOnly("The other phone has no UWB available")
+                Message.NoUwb -> useSignalStrengthOnly(string(R.string.peer_no_uwb))
                 is Message.Location -> onFriendLocation(message)
                 Message.Heartbeat -> Unit
             }
@@ -440,7 +464,10 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         }
     }
 
-    /** Where the gyroscope frame points relative to true north, blending the compass with UWB-versus-GPS calibration. */
+    /**
+     * Where the gyroscope frame points relative to true north, blending the compass with
+     * UWB-versus-GPS calibration.
+     */
     private fun frameOffset(): Bearing? {
         val magnetic = orientation.northOffsetRad?.let {
             val deg = Math.toDegrees(it.toDouble()).toFloat() - declinationDeg
@@ -609,7 +636,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
 
     override fun onDisconnected() {
         viewModelScope.launch {
-            if (linked) relink("Lost the Bluetooth link. Searching again.")
+            if (linked) relink(string(R.string.link_lost))
         }
     }
 
@@ -638,7 +665,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         if (linked) {
             send(Message.Heartbeat)
             if (now - lastPeerMessageMs > PEER_SILENT_MS) {
-                relink("Lost the Bluetooth link. Searching again.")
+                relink(string(R.string.link_lost))
                 return
             }
         }
@@ -709,7 +736,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         failedAttempts++
         if (failedAttempts >= QUIET_AFTER_ATTEMPTS) {
             _state.update {
-                it.copy(uwbActive = false, message = "Precise ranging isn't starting. Using Bluetooth signal.")
+                it.copy(uwbActive = false, message = string(R.string.uwb_not_starting))
             }
         }
         scheduleAttempt(attempt + 1)
@@ -748,8 +775,8 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
     }
 
     private suspend fun uwbUnavailableReason(): String? {
-        val manager = uwbManager ?: return "This phone doesn't report UWB hardware"
-        return if (manager.isAvailable()) null else "UWB is switched off or restricted on this phone"
+        val manager = uwbManager ?: return string(R.string.uwb_no_hardware)
+        return if (manager.isAvailable()) null else string(R.string.uwb_off)
     }
 
     private fun logCapabilities(scope: UwbClientSessionScope) {
@@ -944,6 +971,9 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
     private companion object {
         const val TAG = "Friendar"
         const val PREF_MIRROR = "mirror"
+        const val PREF_METRIC = "metric"
+        const val PREF_DEBUG = "debug"
+        val IMPERIAL_COUNTRIES = setOf("US", "LR", "MM")
         const val UWB_SIGMA_DEG = 12f
         const val UWB_AGING_DEG_PER_S = 2f
         const val ELEVATION_HOLD_MS = 10_000L

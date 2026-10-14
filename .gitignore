@@ -1,5 +1,24 @@
+# Gradle and Kotlin build state
 .gradle/
+.kotlin/
 build/
+
+# Machine-specific SDK path
 local.properties
+
+# IDE
 .idea/
 *.iml
+
+# Built APKs go on the GitHub Releases page, not in the repo
+*.apk
+*.aab
+
+# Signing keys
+*.jks
+*.keystore
+keystore.properties
+
+# OS
+.DS_Store
+Thumbs.db

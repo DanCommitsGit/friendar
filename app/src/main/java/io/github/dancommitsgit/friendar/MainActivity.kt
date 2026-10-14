@@ -1,9 +1,12 @@
-package com.friendar.locator
+package io.github.dancommitsgit.friendar
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -12,7 +15,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,10 +33,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -38,27 +45,36 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp as lerpColor
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.lerp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.util.Locale
 import kotlin.math.cos
@@ -67,6 +83,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlinx.coroutines.launch
 
 private val Blue = Color(0xFF6FA2FF)
 private val Green = Color(0xFF4ADE80)
@@ -108,7 +125,13 @@ class MainActivity : ComponentActivity() {
                     if (state.phase == Phase.Idle) {
                         HomeScreen(onStart = viewModel::start)
                     } else {
-                        FinderScreen(state, onStop = viewModel::stop, onMirror = viewModel::setMirror)
+                        FinderScreen(
+                            state,
+                            onStop = viewModel::stop,
+                            onMirror = viewModel::setMirror,
+                            onMetric = viewModel::setMetric,
+                            onDebug = viewModel::setDebug,
+                        )
                     }
                 }
             }
@@ -166,7 +189,7 @@ private fun HomeScreen(onStart: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            "Friendar",
+            stringResource(R.string.app_name),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -178,11 +201,11 @@ private fun HomeScreen(onStart: () -> Unit) {
                 .fillMaxWidth()
                 .height(64.dp),
         ) {
-            Text("Find my friend", fontSize = 20.sp)
+            Text(stringResource(R.string.home_find), fontSize = 20.sp)
         }
         Spacer(Modifier.height(16.dp))
         Text(
-            "Tap it on both phones.",
+            stringResource(R.string.home_hint),
             color = Muted,
             textAlign = TextAlign.Center,
         )
@@ -190,23 +213,41 @@ private fun HomeScreen(onStart: () -> Unit) {
         if (denied) {
             Spacer(Modifier.height(24.dp))
             Text(
-                "Allow Nearby devices in the app's permissions to connect.",
+                stringResource(R.string.permission_needed),
                 color = Amber,
                 textAlign = TextAlign.Center,
             )
+            TextButton(
+                onClick = {
+                    context.startActivity(
+                        Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.fromParts("package", context.packageName, null),
+                        ),
+                    )
+                },
+            ) {
+                Text(stringResource(R.string.open_settings))
+            }
         }
     }
 }
 
 @Composable
-private fun FinderScreen(state: FinderState, onStop: () -> Unit, onMirror: (Boolean) -> Unit) {
+private fun FinderScreen(
+    state: FinderState,
+    onStop: () -> Unit,
+    onMirror: (Boolean) -> Unit,
+    onMetric: (Boolean) -> Unit,
+    onDebug: (Boolean) -> Unit,
+) {
     val view = LocalView.current
     DisposableEffect(view) {
         view.keepScreenOn = true
         onDispose { view.keepScreenOn = false }
     }
 
-    var showDetails by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     val close = isClose(state.distanceM)
     val arrowColor by animateColorAsState(
         when {
@@ -219,6 +260,7 @@ private fun FinderScreen(state: FinderState, onStop: () -> Unit, onMirror: (Bool
     val showArrow = state.phase == Phase.Ranging && state.arrowDeg != null
     val roughDistance = state.distanceM == null && state.rangeSource == RangeSource.Bluetooth
     var showMap by rememberSaveable { mutableStateOf(false) }
+    val graphicSize = if (showSettings) 160.dp else 240.dp
 
     Column(
         modifier = Modifier
@@ -251,13 +293,13 @@ private fun FinderScreen(state: FinderState, onStop: () -> Unit, onMirror: (Bool
             FilterChip(
                 selected = !showMap,
                 onClick = { showMap = false },
-                label = { Text("Arrow") },
+                label = { Text(stringResource(R.string.chip_arrow)) },
                 colors = chipColors,
             )
             FilterChip(
                 selected = showMap,
                 onClick = { showMap = true },
-                label = { Text("Map") },
+                label = { Text(stringResource(R.string.chip_map)) },
                 colors = chipColors,
             )
         }
@@ -265,42 +307,53 @@ private fun FinderScreen(state: FinderState, onStop: () -> Unit, onMirror: (Bool
         Spacer(Modifier.weight(1f))
 
         if (showMap) {
-            MapView(state, modifier = Modifier.fillMaxWidth().height(if (showDetails) 200.dp else 280.dp))
-            Spacer(Modifier.height(8.dp))
-            Text(
-                mapNote(state),
-                color = Muted,
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            MapView(state, modifier = Modifier.fillMaxWidth().height(if (showSettings) 200.dp else 280.dp))
+            mapNote(state)?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    it,
+                    color = Muted,
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         } else if (showArrow) {
             Arrow(
                 angleDeg = state.arrowDeg,
                 color = arrowColor,
-                modifier = Modifier.size(if (showDetails) 160.dp else 240.dp),
+                modifier = Modifier.size(graphicSize),
             )
         } else {
-            Spacer(Modifier.size(if (showDetails) 160.dp else 240.dp))
+            Spacer(Modifier.size(graphicSize))
         }
         Spacer(Modifier.height(16.dp))
-        Text(
-            text = distanceText(state),
-            fontSize = if (roughDistance) 40.sp else 56.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (close) Green else MaterialTheme.colorScheme.onBackground,
+
+        val swapTarget = swapDistanceText(state)
+        DistanceReadout(
+            primary = distanceText(state),
+            secondary = swapTarget ?: sourceLine(state),
+            swappable = swapTarget != null,
+            primaryColor = if (close) Green else MaterialTheme.colorScheme.onBackground,
+            primarySize = if (roughDistance) 40.sp else 56.sp,
+            metric = state.metric,
+            onSwap = { onMetric(!state.metric) },
         )
-        secondaryLine(state)?.let {
+        levelLine(state)?.let {
             Spacer(Modifier.height(4.dp))
             Text(it, color = Muted, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge)
+        }
+        if (state.debug) {
+            Spacer(Modifier.height(4.dp))
+            Text(debugLine(state), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
         }
 
         Spacer(Modifier.weight(1f))
 
-        if (showDetails) {
+        if (showSettings) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 140.dp)
+                    .heightIn(max = 160.dp)
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = 8.dp),
             ) {
@@ -309,22 +362,35 @@ private fun FinderScreen(state: FinderState, onStop: () -> Unit, onMirror: (Bool
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text("Flip arrow left and right", color = Muted)
+                    Text(stringResource(R.string.flip_arrow), color = Muted)
                     Switch(checked = state.mirror, onCheckedChange = onMirror)
                 }
-                state.frameInfo?.let {
-                    Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(stringResource(R.string.debug_info), color = Muted)
+                    Switch(checked = state.debug, onCheckedChange = onDebug)
                 }
-                state.rawReading?.let {
-                    Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                }
-                state.log.forEach {
-                    Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                if (state.debug) {
+                    state.frameInfo?.let {
+                        Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    }
+                    state.rawReading?.let {
+                        Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    }
+                    state.log.forEach {
+                        Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    }
                 }
             }
         }
-        TextButton(onClick = { showDetails = !showDetails }) {
-            Text(if (showDetails) "Hide details" else "Details", color = Muted)
+        TextButton(onClick = { showSettings = !showSettings }) {
+            Text(
+                stringResource(if (showSettings) R.string.settings_hide else R.string.settings_show),
+                color = Muted,
+            )
         }
         Button(
             onClick = onStop,
@@ -336,10 +402,84 @@ private fun FinderScreen(state: FinderState, onStop: () -> Unit, onMirror: (Bool
                 .fillMaxWidth()
                 .height(56.dp),
         ) {
-            Text("Stop", fontSize = 18.sp)
+            Text(stringResource(R.string.stop), fontSize = 18.sp)
         }
     }
 }
+
+/**
+ * The main distance with a smaller line under it. When [swappable], tapping trades the two
+ * places before [onSwap] changes the unit.
+ */
+@Composable
+private fun DistanceReadout(
+    primary: String,
+    secondary: String?,
+    swappable: Boolean,
+    primaryColor: Color,
+    primarySize: TextUnit,
+    metric: Boolean,
+    onSwap: () -> Unit,
+) {
+    val progress = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var primaryHeight by remember { mutableFloatStateOf(0f) }
+    var secondaryHeight by remember { mutableFloatStateOf(0f) }
+    val gapPx = with(androidx.compose.ui.platform.LocalDensity.current) { 4.dp.toPx() }
+    val shrink = SECONDARY_SIZE.value / primarySize.value
+    val travel = primaryHeight / 2 + gapPx + secondaryHeight / 2
+    val p = progress.value
+
+    // Once the unit has changed, the swapped layout and the reset one look the same.
+    LaunchedEffect(metric) { progress.snapTo(0f) }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(
+            enabled = swappable,
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+        ) {
+            scope.launch {
+                progress.animateTo(1f, tween(SWAP_MS))
+                onSwap()
+            }
+        },
+    ) {
+        Text(
+            text = primary,
+            fontSize = primarySize,
+            fontWeight = FontWeight.Bold,
+            color = lerpColor(primaryColor, Muted, p),
+            modifier = Modifier
+                .onSizeChanged { primaryHeight = it.height.toFloat() }
+                .graphicsLayer {
+                    translationY = p * travel
+                    scaleX = lerp(1f, shrink, p)
+                    scaleY = lerp(1f, shrink, p)
+                },
+        )
+        if (secondary != null) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = secondary,
+                fontSize = SECONDARY_SIZE,
+                color = lerpColor(Muted, primaryColor, p),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .onSizeChanged { secondaryHeight = it.height.toFloat() }
+                    .graphicsLayer {
+                        translationY = -p * travel
+                        scaleX = lerp(1f, 1f / shrink, p)
+                        scaleY = lerp(1f, 1f / shrink, p)
+                    },
+            )
+        }
+    }
+}
+
+private val SECONDARY_SIZE = 16.sp
+private const val SWAP_MS = 260
 
 @Composable
 private fun Arrow(angleDeg: Float, color: Color, modifier: Modifier = Modifier) {
@@ -358,14 +498,22 @@ private fun Arrow(angleDeg: Float, color: Color, modifier: Modifier = Modifier) 
     }
 }
 
+private const val FEET_PER_METER = 3.28084f
 private val MapFeetSteps = listOf(30, 60, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000)
+private val MapMeterSteps = listOf(10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000)
 
-private fun feetLabel(feet: Int): String =
-    if (feet >= 5280) String.format(Locale.US, "%.1f mi", feet / 5280f) else "$feet ft"
+private fun scaleLabel(extent: Int, metric: Boolean): String = when {
+    metric && extent >= 1000 -> String.format(Locale.US, "%.1f km", extent / 1000f)
+    metric -> "$extent m"
+    extent >= 5280 -> String.format(Locale.US, "%.1f mi", extent / 5280f)
+    else -> "$extent ft"
+}
 
 @Composable
 private fun MapView(state: FinderState, modifier: Modifier = Modifier) {
     val friend = state.friend
+    val northLabel = stringResource(R.string.map_north)
+    val emptyLabel = stringResource(R.string.map_no_position)
     Canvas(modifier = modifier) {
         val cx = size.width / 2
         val cy = size.height / 2
@@ -374,8 +522,15 @@ private fun MapView(state: FinderState, modifier: Modifier = Modifier) {
             friend?.let { hypot(it.eastM, it.northM) + it.sigmaM } ?: 0f,
             state.rangeM ?: 0f,
         ) * 1.15f
-        val extentFeet = MapFeetSteps.firstOrNull { it / 3.28084f >= needed } ?: MapFeetSteps.last()
-        val extentM = extentFeet / 3.28084f
+        val extentUnits: Int
+        val extentM: Float
+        if (state.metric) {
+            extentUnits = MapMeterSteps.firstOrNull { it >= needed } ?: MapMeterSteps.last()
+            extentM = extentUnits.toFloat()
+        } else {
+            extentUnits = MapFeetSteps.firstOrNull { it / FEET_PER_METER >= needed } ?: MapFeetSteps.last()
+            extentM = extentUnits / FEET_PER_METER
+        }
         val scale = half / extentM
         val center = Offset(cx, cy)
 
@@ -396,9 +551,9 @@ private fun MapView(state: FinderState, modifier: Modifier = Modifier) {
         drawCircle(ring, radius = half / 2, center = center, style = Stroke(1.dp.toPx()))
         drawContext.canvas.nativeCanvas.apply {
             val northRadius = half + 10.dp.toPx()
-            drawText("N", cx - sinTurn * northRadius, cy + 4.dp.toPx() - cosTurn * northRadius, text)
-            drawText(feetLabel(extentFeet), cx, cy + half + 14.dp.toPx(), text)
-            drawText(feetLabel(extentFeet / 2), cx, cy + half / 2 + 14.dp.toPx(), text)
+            drawText(northLabel, cx - sinTurn * northRadius, cy + 4.dp.toPx() - cosTurn * northRadius, text)
+            drawText(scaleLabel(extentUnits, state.metric), cx, cy + half + 14.dp.toPx(), text)
+            drawText(scaleLabel(extentUnits / 2, state.metric), cx, cy + half / 2 + 14.dp.toPx(), text)
         }
 
         val range = state.rangeM
@@ -443,95 +598,127 @@ private fun MapView(state: FinderState, modifier: Modifier = Modifier) {
         drawCircle(Blue, radius = 8.dp.toPx(), center = center)
         drawCircle(Color.White, radius = 3.dp.toPx(), center = center)
         if (friend == null && range == null) {
-            drawContext.canvas.nativeCanvas.drawText("No position yet", cx, cy + 40.dp.toPx(), text)
+            drawContext.canvas.nativeCanvas.drawText(emptyLabel, cx, cy + 40.dp.toPx(), text)
         }
     }
 }
 
-private fun mapNote(state: FinderState): String {
+/** A caption under the map when its position is less trustworthy; null when nothing needs saying. */
+@Composable
+private fun mapNote(state: FinderState): String? {
     val friend = state.friend
-    val source = when (state.rangeSource) {
+    return when {
+        friend?.source == EstimateSource.RangeAndBearing ->
+            if (state.arrowSource == DirectionSource.Gps) stringResource(R.string.map_note_gps_direction) else null
+
+        friend?.source == EstimateSource.RangeAndGps -> stringResource(R.string.map_note_gps_direction)
+        friend?.source == EstimateSource.GpsOnly -> stringResource(
+            R.string.map_note_gps_only,
+            if (state.metric) "30 m" else "100 ft",
+        )
+
+        state.rangeM != null -> stringResource(R.string.map_note_ring)
+        else -> stringResource(R.string.map_note_waiting)
+    }
+}
+
+/** Where the readings come from, for the debug view. */
+private fun debugLine(state: FinderState): String {
+    val range = when (state.rangeSource) {
         RangeSource.Uwb -> "UWB"
         RangeSource.Wifi -> "Wi-Fi"
         RangeSource.Bluetooth -> "Bluetooth"
-        null -> ""
+        null -> "-"
     }
-    return when {
-        friend?.source == EstimateSource.RangeAndBearing -> when (state.arrowSource) {
-            DirectionSource.Gps -> "Distance from $source, direction from GPS."
-            DirectionSource.Both -> "Distance from $source, direction from UWB and GPS."
-            else -> "Distance from $source, direction from UWB."
-        }
-
-        friend?.source == EstimateSource.RangeAndGps -> "Distance from $source, direction from GPS."
-        friend?.source == EstimateSource.GpsOnly ->
-            "GPS only. Indoors it can be off by 30 m or more."
-
-        state.rangeM != null -> "Your friend is somewhere on the dashed ring."
-        else -> "Waiting for a position."
+    val direction = when (state.arrowSource) {
+        DirectionSource.Uwb -> "UWB"
+        DirectionSource.Gps -> "GPS"
+        DirectionSource.Both -> "UWB+GPS"
+        null -> "-"
     }
+    val position = when (state.friend?.source) {
+        EstimateSource.RangeAndBearing -> "range+bearing"
+        EstimateSource.RangeAndGps -> "range+GPS"
+        EstimateSource.GpsOnly -> "GPS only"
+        null -> "-"
+    }
+    return "range: $range, direction: $direction, position: $position"
 }
 
-private fun statusLine(state: FinderState): String = when (state.phase) {
-    Phase.Waiting -> "Looking for your friend"
-    Phase.Ranging -> when {
-        isClose(state.distanceM) -> "Right here"
-        state.distanceM == null -> when (state.trend) {
-            Trend.Closer -> "Getting closer"
-            Trend.Farther -> "Getting farther"
-            Trend.Steady -> "Keep walking to see which way is closer"
-            null -> "Measuring"
+@Composable
+private fun statusLine(state: FinderState): String {
+    val id = when (state.phase) {
+        Phase.Waiting -> R.string.status_looking
+        Phase.Ranging -> when {
+            isClose(state.distanceM) -> R.string.status_here
+            state.distanceM == null -> when (state.trend) {
+                Trend.Closer -> R.string.status_closer
+                Trend.Farther -> R.string.status_farther
+                Trend.Steady -> R.string.status_walk
+                null -> R.string.status_measuring
+            }
+
+            state.arrowDeg == null -> R.string.status_sweep
+            state.arrowSource == DirectionSource.Gps -> R.string.status_gps
+            !state.directionLive && state.flat -> R.string.status_tilt
+            !state.directionLive -> R.string.status_aim
+            else -> R.string.status_follow
         }
 
-        state.arrowDeg == null -> "Point the back of the phone around the room"
-        state.arrowSource == DirectionSource.Gps -> "Rough direction from GPS. Walk that way and watch the distance."
-        !state.directionLive && state.flat -> "Tilt the phone up and aim its back at your friend"
-        !state.directionLive -> "Aim the back of the phone at your friend"
-        else -> "Follow the arrow"
+        Phase.Failed -> return state.message ?: stringResource(R.string.status_failed)
+        Phase.Idle -> return ""
     }
+    return stringResource(id)
+}
 
-    Phase.Failed -> state.message ?: "Something went wrong"
-    Phase.Idle -> ""
+private fun formatDistance(meters: Float, metric: Boolean): String {
+    val value = if (metric) meters else meters * FEET_PER_METER
+    val unit = if (metric) "m" else "ft"
+    return if (value < 10f) {
+        String.format(Locale.US, "%.1f %s", value, unit)
+    } else {
+        "${value.roundToInt()} $unit"
+    }
 }
 
 private fun distanceText(state: FinderState): String {
     val meters = state.distanceM
-    if (meters == null) {
-        return when (state.rangeSource) {
-            RangeSource.Wifi -> {
-                val feet = (state.rangeM ?: return "—") * 3.28084f
-                "~${max(5, (feet / 5f).roundToInt() * 5)} ft"
-            }
-
-            RangeSource.Bluetooth -> roughDistanceText(state.rangeM ?: return "—")
-            else -> "—"
+    if (meters != null) return formatDistance(meters, state.metric)
+    val range = state.rangeM ?: return "—"
+    return when (state.rangeSource) {
+        RangeSource.Wifi -> if (state.metric) {
+            "~${max(2, range.roundToInt())} m"
+        } else {
+            "~${max(5, (range * FEET_PER_METER / 5f).roundToInt() * 5)} ft"
         }
-    }
-    val feet = meters * 3.28084f
-    return if (feet < 10f) {
-        String.format(Locale.US, "%.1f ft", feet)
-    } else {
-        "${feet.roundToInt()} ft"
+
+        RangeSource.Bluetooth -> roughDistanceText(range, state.metric)
+        else -> "—"
     }
 }
 
-private fun secondaryLine(state: FinderState): String? {
-    if (state.phase != Phase.Ranging) return null
-    val meters = state.distanceM
-    if (meters == null) {
-        return when (state.rangeSource) {
-            RangeSource.Wifi -> "Wi-Fi distance, works through walls"
-            RangeSource.Bluetooth -> "Rough estimate from Bluetooth signal"
-            else -> null
-        }
-    }
-    val metric = String.format(Locale.US, "%.1f m", meters)
-    val elevation = state.elevationDeg
-    val level = when {
-        elevation == null -> null
-        elevation > 25f -> "above you"
-        elevation < -25f -> "below you"
+/** The same distance in the other unit; only precise readings are shown both ways. */
+private fun swapDistanceText(state: FinderState): String? =
+    state.distanceM?.let { formatDistance(it, !state.metric) }
+
+/** For readings that are not precise, a line that says how rough they are. */
+@Composable
+private fun sourceLine(state: FinderState): String? {
+    if (state.phase != Phase.Ranging || state.distanceM != null) return null
+    return when (state.rangeSource) {
+        RangeSource.Wifi -> stringResource(R.string.via_wifi)
+        RangeSource.Bluetooth -> stringResource(R.string.via_bluetooth)
         else -> null
     }
-    return if (level != null) "$metric · $level" else metric
+}
+
+@Composable
+private fun levelLine(state: FinderState): String? {
+    if (state.phase != Phase.Ranging || state.distanceM == null) return null
+    val elevation = state.elevationDeg ?: return null
+    return when {
+        elevation > 25f -> stringResource(R.string.above_you)
+        elevation < -25f -> stringResource(R.string.below_you)
+        else -> null
+    }
 }

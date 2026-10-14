@@ -1,4 +1,4 @@
-package com.friendar.locator
+package io.github.dancommitsgit.friendar
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -51,8 +51,15 @@ class SignalTest {
 
     @Test
     fun distanceBands() {
-        assertEquals("Under 10 ft", roughDistanceText(2f))
-        assertEquals("25–50 ft", roughDistanceText(10f))
-        assertEquals("100+ ft", roughDistanceText(40f))
+        assertEquals("Under 10 ft", roughDistanceText(2f, metric = false))
+        assertEquals("25–50 ft", roughDistanceText(10f, metric = false))
+        assertEquals("100+ ft", roughDistanceText(40f, metric = false))
+    }
+
+    @Test
+    fun metricDistanceBands() {
+        assertEquals("Under 3 m", roughDistanceText(2f, metric = true))
+        assertEquals("8–15 m", roughDistanceText(10f, metric = true))
+        assertEquals("30+ m", roughDistanceText(40f, metric = true))
     }
 }

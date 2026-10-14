@@ -1,4 +1,4 @@
-package com.friendar.locator
+package io.github.dancommitsgit.friendar
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -20,7 +20,11 @@ class LocatorService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Searching", NotificationManager.IMPORTANCE_LOW),
+            NotificationChannel(
+                CHANNEL_ID,
+                getString(R.string.notification_channel),
+                NotificationManager.IMPORTANCE_LOW,
+            ),
         )
         val open = PendingIntent.getActivity(
             this,
@@ -30,8 +34,8 @@ class LocatorService : Service() {
         )
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-            .setContentTitle("Friendar")
-            .setContentText("Looking for your friend")
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(getString(R.string.notification_text))
             .setContentIntent(open)
             .setOngoing(true)
             .build()

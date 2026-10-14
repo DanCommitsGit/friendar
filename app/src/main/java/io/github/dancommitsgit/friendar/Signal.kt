@@ -1,4 +1,4 @@
-package com.friendar.locator
+package io.github.dancommitsgit.friendar
 
 import kotlin.math.pow
 
@@ -85,8 +85,17 @@ class RangeTrend(private val windowMs: Long = 12_000L) {
     }
 }
 
-/** Distance band for a Bluetooth-based estimate, in feet. */
-fun roughDistanceText(meters: Float): String {
+/** Distance band for a Bluetooth-based estimate; the bands are about 10, 25, 50 and 100 ft. */
+fun roughDistanceText(meters: Float, metric: Boolean): String {
+    if (metric) {
+        return when {
+            meters < 3f -> "Under 3 m"
+            meters < 8f -> "3–8 m"
+            meters < 15f -> "8–15 m"
+            meters < 30f -> "15–30 m"
+            else -> "30+ m"
+        }
+    }
     val feet = meters * 3.28084f
     return when {
         feet < 10f -> "Under 10 ft"
