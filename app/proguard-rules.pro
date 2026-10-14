@@ -1,0 +1,3 @@
+-keep class androidx.core.uwb.** { *; }
+-keep class com.google.android.gms.nearby.uwb.** { *; }
+-keep class com.friendar.locator.** { *; }
