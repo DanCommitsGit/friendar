@@ -10,10 +10,7 @@
     [
       "@semantic-release/github",
       {
-        "assets": [
-          { "path": "release-assets/friendar-*.apk" },
-          { "path": "release-assets/friendar-*.apk.sha256" }
-        ],
+        "assets": [{ "path": "release-assets/friendar-*.apk" }],
         "successComment": false,
         "failComment": false,
         "releasedLabels": false

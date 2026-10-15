@@ -49,7 +49,6 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           FRIENDAR_KEYSTORE_FILE: ${{ runner.temp }}/release.jks
           FRIENDAR_KEYSTORE_PASSWORD: ${{ secrets.FRIENDAR_KEYSTORE_PASSWORD }}
-          FRIENDAR_KEY_ALIAS: ${{ secrets.FRIENDAR_KEY_ALIAS }}
           FRIENDAR_KEY_PASSWORD: ${{ secrets.FRIENDAR_KEY_PASSWORD }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |

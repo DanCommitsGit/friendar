@@ -13,4 +13,3 @@ apk=app/build/outputs/apk/release/app-release.apk
 
 mkdir -p release-assets
 cp "$apk" "release-assets/friendar-$version.apk"
-(cd release-assets && sha256sum "friendar-$version.apk" > "friendar-$version.apk.sha256")

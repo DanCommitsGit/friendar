@@ -33,7 +33,7 @@ android {
             create("release") {
                 storeFile = file(releaseKeystore)
                 storePassword = System.getenv("FRIENDAR_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("FRIENDAR_KEY_ALIAS")
+                keyAlias = "friendar"
                 keyPassword = System.getenv("FRIENDAR_KEY_PASSWORD")
             }
         }
