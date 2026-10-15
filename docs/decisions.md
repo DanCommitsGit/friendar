@@ -32,6 +32,18 @@ With Keep searching in the background on, a foreground service holds the search 
 
 Theme is System, Light or Dark and defaults to System. Both schemes are fixed palettes, not wallpaper-derived dynamic color, because blue, green and amber mean something on the arrow and the map.
 
+## One screen for idle and searching
+
+Find and Stop are the same button at the bottom, and the middle swaps between the idle hero and the search. A separate home screen was removed so starting and stopping do not change screens.
+
+## Pages are a plain back stack
+
+There is no navigation library. `PageHost` animates pushes and pops and follows the system back gesture with a seekable transition, which needs `enableOnBackInvokedCallback` in the manifest. The gesture only drags the page part of the way, since system progress saturates after about a third of the screen width.
+
+## Material 3 is pinned to 1.5.0-alpha18
+
+Connected button groups, the loading indicator, flexible app bars and segmented list items are not in 1.4.0, which is what the Compose BOM maps to. 1.5.0-alpha19 and later need compileSdk 37, and 1.5.0-beta01 needs Android Gradle plugin 9.1, so alpha18 is the newest that builds on AGP 8.13. Move to the stable 1.5.0 when the toolchain is upgraded.
+
 ## Technical readings sit behind the debug switch
 
 Measurement sources, raw readings and the log appear only when Debug info is on in settings. The map caption is shown only when the position is less trustworthy than usual.

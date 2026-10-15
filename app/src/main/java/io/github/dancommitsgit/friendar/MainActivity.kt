@@ -6,19 +6,33 @@ import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,12 +49,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -53,6 +73,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -64,6 +85,7 @@ import androidx.compose.ui.graphics.lerp as lerpColor
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -73,6 +95,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.util.Locale
 import kotlin.math.cos
@@ -108,40 +131,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                     contentColor = MaterialTheme.colorScheme.onBackground,
                 ) {
-                    var page by rememberSaveable { mutableStateOf(Page.Main) }
-                    BackHandler(enabled = page != Page.Main) {
-                        page = if (page == Page.Settings) Page.Main else Page.Settings
-                    }
-                    when (page) {
-                        Page.Main -> if (state.phase == Phase.Idle) {
-                            HomeScreen(
-                                onStart = viewModel::start,
-                                onSettings = { page = Page.Settings },
-                            )
-                        } else {
-                            FinderScreen(
-                                state,
-                                onStop = viewModel::stop,
-                                onMetric = viewModel::setMetric,
-                                onSettings = { page = Page.Settings },
-                            )
-                        }
-
-                        Page.Settings -> SettingsScreen(
-                            state,
-                            onBack = { page = Page.Main },
-                            onFlip = viewModel::setFlipMode,
-                            onUnits = viewModel::setUnitMode,
-                            onTheme = viewModel::setThemeMode,
-                            onBackground = viewModel::setBackground,
-                            onDebug = viewModel::setDebug,
-                            onOpenPhone = { page = Page.Phone },
-                            onOpenPermissions = { page = Page.Permissions },
-                        )
-
-                        Page.Phone -> PhoneScreen(onBack = { page = Page.Settings })
-                        Page.Permissions -> PermissionsScreen(onBack = { page = Page.Settings })
-                    }
+                    FriendarApp(viewModel, state)
                 }
             }
         }
@@ -152,8 +142,6 @@ class MainActivity : ComponentActivity() {
         if (!isChangingConfigurations) viewModel.onAppHidden()
     }
 }
-
-private enum class Page { Main, Settings, Phone, Permissions }
 
 private val requiredPermissions = arrayOf(
     Manifest.permission.BLUETOOTH_SCAN,
@@ -173,10 +161,16 @@ private val bluetoothPermissions = setOf(
 )
 
 @Composable
-private fun HomeScreen(onStart: () -> Unit, onSettings: () -> Unit) {
-    val context = LocalView.current.context
+private fun FriendarApp(viewModel: FinderViewModel, state: FinderState) {
+    val context = LocalContext.current
+    var stack by rememberSaveable { mutableStateOf(listOf(Page.Main)) }
+    var showMap by rememberSaveable { mutableStateOf(false) }
+    var denied by rememberSaveable { mutableStateOf(false) }
+    val resumed = rememberResumeCount()
+    val bluetoothAllowed = remember(resumed, denied) {
+        bluetoothPermissions.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+    }
     var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
-    var denied by remember { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
         // Every other permission only adds a ranging method, so the app still runs without it.
         val bluetoothOk = bluetoothPermissions.all { grants[it] == true }
@@ -184,50 +178,155 @@ private fun HomeScreen(onStart: () -> Unit, onSettings: () -> Unit) {
         if (bluetoothOk) pending?.invoke()
     }
 
-    fun withPermissions(action: () -> Unit) {
+    fun start() {
         val missing = requiredPermissions.any {
             context.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED
         }
         if (missing) {
-            pending = action
+            pending = viewModel::start
             launcher.launch(requiredPermissions)
         } else {
-            action()
+            viewModel.start()
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
-        TextButton(onClick = onSettings, modifier = Modifier.align(Alignment.TopEnd)) {
-            Text(stringResource(R.string.settings), color = Muted)
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(48.dp))
-            Button(
-                onClick = { withPermissions(onStart) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp),
-            ) {
-                Text(stringResource(R.string.home_find), fontSize = 20.sp)
-            }
+    fun push(page: Page) {
+        if (stack.last() != page) stack = stack + page
+    }
 
-            if (denied) {
-                Spacer(Modifier.height(24.dp))
+    fun pop() {
+        if (stack.size > 1) stack = stack.dropLast(1)
+    }
+
+    PageHost(stack = stack, onBack = ::pop) { page ->
+        when (page) {
+            Page.Main -> MainScreen(
+                state = state,
+                showMap = showMap,
+                onShowMap = { showMap = it },
+                permissionDenied = denied && !bluetoothAllowed,
+                onStart = ::start,
+                onStop = viewModel::stop,
+                onMetric = viewModel::setMetric,
+                onSettings = { push(Page.Settings) },
+            )
+
+            Page.Settings -> SettingsScreen(
+                state,
+                onBack = ::pop,
+                onFlip = viewModel::setFlipMode,
+                onUnits = viewModel::setUnitMode,
+                onTheme = viewModel::setThemeMode,
+                onBackground = viewModel::setBackground,
+                onDebug = viewModel::setDebug,
+                onOpenPhone = { push(Page.Phone) },
+                onOpenPermissions = { push(Page.Permissions) },
+            )
+
+            Page.Phone -> PhoneScreen(onBack = ::pop)
+            Page.Permissions -> PermissionsScreen(onBack = ::pop)
+        }
+    }
+}
+
+/**
+ * One screen for both states. The top bar and the action button stay put; the middle swaps
+ * between the idle hero and the live search, and the button changes from Find to Stop.
+ */
+@Composable
+private fun MainScreen(
+    state: FinderState,
+    showMap: Boolean,
+    onShowMap: (Boolean) -> Unit,
+    permissionDenied: Boolean,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    onMetric: (Boolean) -> Unit,
+    onSettings: () -> Unit,
+) {
+    val searching = state.phase != Phase.Idle
+    val view = LocalView.current
+    DisposableEffect(view, searching) {
+        view.keepScreenOn = searching
+        onDispose { view.keepScreenOn = false }
+    }
+    val motion = MaterialTheme.motionScheme
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .systemBarsPadding()
+            .padding(horizontal = 24.dp),
+    ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.End) {
+            IconButton(onClick = onSettings) {
+                Icon(AppIcons.Settings, contentDescription = stringResource(R.string.settings))
+            }
+        }
+        AnimatedContent(
+            targetState = searching,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            transitionSpec = {
+                (fadeIn(motion.defaultEffectsSpec()) + scaleIn(motion.defaultSpatialSpec(), initialScale = 0.92f)) togetherWith
+                    (fadeOut(motion.fastEffectsSpec()) + scaleOut(motion.fastSpatialSpec(), targetScale = 0.96f))
+            },
+            label = "main",
+        ) { active ->
+            if (active) {
+                SearchContent(state, showMap, onShowMap, onMetric)
+            } else {
+                IdleContent(permissionDenied)
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        PrimaryAction(searching, onStart, onStop)
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun IdleContent(permissionDenied: Boolean) {
+    val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val shape = MaterialShapes.Cookie9Sided.toShape()
+    val turn = rememberInfiniteTransition(label = "hero")
+    val rotation by turn.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(60_000, easing = LinearEasing), RepeatMode.Restart),
+        label = "rotation",
+    )
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(modifier = Modifier.size(200.dp), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { rotationZ = rotation }
+                    .clip(shape)
+                    .background(scheme.primaryContainer),
+            )
+            Arrow(angleDeg = 0f, color = scheme.onPrimaryContainer, modifier = Modifier.size(84.dp))
+        }
+        Spacer(Modifier.height(24.dp))
+        Text(
+            stringResource(R.string.app_name),
+            style = MaterialTheme.typography.displaySmallEmphasized,
+            textAlign = TextAlign.Center,
+        )
+        AnimatedVisibility(
+            visible = permissionDenied,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 24.dp)) {
                 Text(
                     stringResource(R.string.permission_needed),
-                    color = Amber,
+                    color = MaterialTheme.warning,
                     textAlign = TextAlign.Center,
                 )
                 TextButton(onClick = { openAppSettings(context) }) {
@@ -238,101 +337,155 @@ private fun HomeScreen(onStart: () -> Unit, onSettings: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun FinderScreen(
-    state: FinderState,
-    onStop: () -> Unit,
-    onMetric: (Boolean) -> Unit,
-    onSettings: () -> Unit,
-) {
-    val view = LocalView.current
-    DisposableEffect(view) {
-        view.keepScreenOn = true
-        onDispose { view.keepScreenOn = false }
+private fun PrimaryAction(searching: Boolean, onStart: () -> Unit, onStop: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val motion = MaterialTheme.motionScheme
+    val container by animateColorAsState(
+        if (searching) scheme.secondaryContainer else scheme.primary,
+        motion.defaultEffectsSpec(),
+        label = "container",
+    )
+    val content by animateColorAsState(
+        if (searching) scheme.onSecondaryContainer else scheme.onPrimary,
+        motion.defaultEffectsSpec(),
+        label = "content",
+    )
+    Button(
+        onClick = { if (searching) onStop() else onStart() },
+        shapes = ButtonDefaults.shapes(),
+        colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = content),
+        contentPadding = ButtonDefaults.contentPaddingFor(ButtonDefaults.MediumContainerHeight),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = ButtonDefaults.MediumContainerHeight),
+    ) {
+        AnimatedContent(
+            targetState = searching,
+            transitionSpec = { fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) },
+            label = "action",
+        ) { active ->
+            Text(
+                stringResource(if (active) R.string.stop else R.string.home_find),
+                style = MaterialTheme.typography.titleLargeEmphasized,
+            )
+        }
     }
+}
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun SearchContent(
+    state: FinderState,
+    showMap: Boolean,
+    onShowMap: (Boolean) -> Unit,
+    onMetric: (Boolean) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val motion = MaterialTheme.motionScheme
     val close = isClose(state.distanceM)
     val arrowColor by animateColorAsState(
         when {
-            close -> Green
-            state.directionLive && state.arrowSource == DirectionSource.Uwb -> Blue
-            else -> Amber
+            close -> MaterialTheme.success
+            state.directionLive && state.arrowSource == DirectionSource.Uwb -> scheme.primary
+            else -> MaterialTheme.warning
         },
+        motion.defaultEffectsSpec(),
         label = "arrowColor",
     )
     val showArrow = state.phase == Phase.Ranging && state.arrowDeg != null
     val roughDistance = state.distanceM == null && state.rangeSource == RangeSource.Bluetooth
-    var showMap by rememberSaveable { mutableStateOf(false) }
     val graphicSize = if (state.debug) 160.dp else 240.dp
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .systemBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = onSettings) {
-                Text(stringResource(R.string.settings), color = Muted)
+        Column(
+            modifier = Modifier.fillMaxWidth().animateContentSize(motion.defaultSpatialSpec()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            AnimatedContent(
+                targetState = statusLine(state),
+                transitionSpec = { fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) },
+                label = "status",
+            ) { text ->
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.titleLargeEmphasized,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
-        }
-        Text(
-            text = statusLine(state),
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        val note = state.hint ?: state.message.takeIf {
-            state.phase == Phase.Ranging || state.phase == Phase.Waiting
-        }
-        if (note != null) {
-            Spacer(Modifier.height(8.dp))
-            Text(note, color = Amber, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
-        }
-
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val chipColors = FilterChipDefaults.filterChipColors(
-                labelColor = OnInk,
-                selectedLabelColor = OnInk,
-                selectedContainerColor = Raised,
-            )
-            FilterChip(
-                selected = !showMap,
-                onClick = { showMap = false },
-                label = { Text(stringResource(R.string.chip_arrow)) },
-                colors = chipColors,
-            )
-            FilterChip(
-                selected = showMap,
-                onClick = { showMap = true },
-                label = { Text(stringResource(R.string.chip_map)) },
-                colors = chipColors,
-            )
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        if (showMap) {
-            MapView(state, modifier = Modifier.fillMaxWidth().height(if (state.debug) 200.dp else 280.dp))
-            mapNote(state)?.let {
+            val note = state.hint ?: state.message.takeIf {
+                state.phase == Phase.Ranging || state.phase == Phase.Waiting
+            }
+            if (note != null) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    it,
-                    color = Muted,
+                    note,
+                    color = MaterialTheme.warning,
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-        } else if (showArrow) {
-            Arrow(
-                angleDeg = state.arrowDeg,
-                color = arrowColor,
-                modifier = Modifier.size(graphicSize),
-            )
-        } else {
-            Spacer(Modifier.size(graphicSize))
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+            ToggleButton(
+                checked = !showMap,
+                onCheckedChange = { onShowMap(false) },
+                colors = connectedToggleColors(),
+                shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
+            ) { Text(stringResource(R.string.chip_arrow)) }
+            ToggleButton(
+                checked = showMap,
+                onCheckedChange = { onShowMap(true) },
+                colors = connectedToggleColors(),
+                shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
+            ) { Text(stringResource(R.string.chip_map)) }
+        }
+
+        Spacer(Modifier.weight(1f))
+
+        AnimatedContent(
+            targetState = when {
+                showMap -> Graphic.Map
+                showArrow -> Graphic.Arrow
+                else -> Graphic.Waiting
+            },
+            transitionSpec = {
+                (fadeIn(motion.defaultEffectsSpec()) + scaleIn(motion.defaultSpatialSpec(), initialScale = 0.85f)) togetherWith
+                    fadeOut(motion.fastEffectsSpec())
+            },
+            label = "graphic",
+        ) { graphic ->
+            when (graphic) {
+                Graphic.Map -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    MapView(state, modifier = Modifier.fillMaxWidth().height(if (state.debug) 200.dp else 280.dp))
+                    mapNote(state)?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            it,
+                            color = scheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+
+                Graphic.Arrow -> Arrow(
+                    angleDeg = state.arrowDeg ?: 0f,
+                    color = arrowColor,
+                    modifier = Modifier.size(graphicSize),
+                )
+
+                Graphic.Waiting -> Box(modifier = Modifier.size(graphicSize), contentAlignment = Alignment.Center) {
+                    LoadingIndicator(modifier = Modifier.size(96.dp))
+                }
+            }
         }
         Spacer(Modifier.height(16.dp))
 
@@ -341,18 +494,22 @@ private fun FinderScreen(
             primary = distanceText(state),
             secondary = swapTarget ?: sourceLine(state),
             swappable = swapTarget != null,
-            primaryColor = if (close) Green else MaterialTheme.colorScheme.onBackground,
+            primaryColor = when {
+                close -> MaterialTheme.success
+                state.distanceM == null && state.rangeM == null -> scheme.onSurfaceVariant
+                else -> scheme.onBackground
+            },
             primarySize = if (roughDistance) 40.sp else 56.sp,
             metric = state.metric,
             onSwap = { onMetric(!state.metric) },
         )
         levelLine(state)?.let {
             Spacer(Modifier.height(4.dp))
-            Text(it, color = Muted, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge)
+            Text(it, color = scheme.onSurfaceVariant, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge)
         }
         if (state.debug) {
             Spacer(Modifier.height(4.dp))
-            Text(debugLine(state), color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+            Text(debugLine(state), color = scheme.onSurfaceVariant, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
         }
 
         Spacer(Modifier.weight(1f))
@@ -366,30 +523,20 @@ private fun FinderScreen(
                     .padding(bottom = 8.dp),
             ) {
                 state.frameInfo?.let {
-                    Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    Text(it, color = scheme.onSurfaceVariant, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                 }
                 state.rawReading?.let {
-                    Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    Text(it, color = scheme.onSurfaceVariant, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                 }
                 state.log.forEach {
-                    Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    Text(it, color = scheme.onSurfaceVariant, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                 }
             }
         }
-        Button(
-            onClick = onStop,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Raised,
-                contentColor = OnInk,
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-        ) {
-            Text(stringResource(R.string.stop), fontSize = 18.sp)
-        }
     }
 }
+
+private enum class Graphic { Arrow, Map, Waiting }
 
 /**
  * The main distance with a smaller line under it. When [swappable], tapping trades the two
@@ -405,6 +552,7 @@ private fun DistanceReadout(
     metric: Boolean,
     onSwap: () -> Unit,
 ) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val progress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     var primaryHeight by remember { mutableFloatStateOf(0f) }
@@ -434,7 +582,7 @@ private fun DistanceReadout(
             text = primary,
             fontSize = primarySize,
             fontWeight = FontWeight.Bold,
-            color = lerpColor(primaryColor, Muted, p),
+            color = lerpColor(primaryColor, muted, p),
             modifier = Modifier
                 .onSizeChanged { primaryHeight = it.height.toFloat() }
                 .graphicsLayer {
@@ -448,7 +596,7 @@ private fun DistanceReadout(
             Text(
                 text = secondary,
                 fontSize = SECONDARY_SIZE,
-                color = lerpColor(Muted, primaryColor, p),
+                color = lerpColor(muted, primaryColor, p),
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .onSizeChanged { secondaryHeight = it.height.toFloat() }
@@ -478,7 +626,7 @@ private fun Arrow(angleDeg: Float, color: Color, modifier: Modifier = Modifier) 
             close()
         }
         drawPath(path, color)
-        drawCircle(Color.White.copy(alpha = 0.2f), radius = 6f, center = Offset(w / 2, h * 0.7f))
+        drawCircle(Color.White.copy(alpha = 0.25f), radius = 6f, center = Offset(w / 2, h * 0.7f))
     }
 }
 
@@ -498,10 +646,12 @@ private fun MapView(state: FinderState, modifier: Modifier = Modifier) {
     val friend = state.friend
     val northLabel = stringResource(R.string.map_north)
     val emptyLabel = stringResource(R.string.map_no_position)
-    val muted = Muted
-    val blue = Blue
-    val green = Green
-    val amber = Amber
+    val scheme = MaterialTheme.colorScheme
+    val muted = scheme.onSurfaceVariant
+    val me = scheme.primary
+    val onMe = scheme.onPrimary
+    val success = MaterialTheme.success
+    val warning = MaterialTheme.warning
     Canvas(modifier = modifier) {
         val cx = size.width / 2
         val cy = size.height / 2
@@ -547,9 +697,9 @@ private fun MapView(state: FinderState, modifier: Modifier = Modifier) {
         val range = state.rangeM
         val close = isClose(state.distanceM)
         val tone = when {
-            close -> green
-            state.rangeSource == RangeSource.Uwb -> blue
-            else -> amber
+            close -> success
+            state.rangeSource == RangeSource.Uwb -> me
+            else -> warning
         }
         if (range != null) {
             drawCircle(
@@ -580,11 +730,11 @@ private fun MapView(state: FinderState, modifier: Modifier = Modifier) {
                     lineTo(cx + wing, cy)
                     close()
                 },
-                blue.copy(alpha = 0.5f),
+                me.copy(alpha = 0.5f),
             )
         }
-        drawCircle(blue, radius = 8.dp.toPx(), center = center)
-        drawCircle(Color.White, radius = 3.dp.toPx(), center = center)
+        drawCircle(me, radius = 8.dp.toPx(), center = center)
+        drawCircle(onMe, radius = 3.dp.toPx(), center = center)
         if (friend == null && range == null) {
             drawContext.canvas.nativeCanvas.drawText(emptyLabel, cx, cy + 40.dp.toPx(), text)
         }

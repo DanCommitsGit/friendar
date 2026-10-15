@@ -1,6 +1,10 @@
 package io.github.dancommitsgit.friendar
 
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -88,28 +92,29 @@ private val LightWarning = Color(0xFF9A5B00)
 
 private val LocalWarning = staticCompositionLocalOf { DarkWarning }
 
-// Semantic colors shared by the screens; each resolves through the active scheme.
-internal val Blue: Color
-    @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.primary
-
-internal val Green: Color
-    @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.tertiary
-
-internal val Amber: Color
+/** Approximate or slow readings and hints; the color scheme has no role for this. */
+internal val MaterialTheme.warning: Color
     @Composable @ReadOnlyComposable get() = LocalWarning.current
 
-internal val OnInk: Color
-    @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onBackground
+/** The distance is close enough to say the friend is here; stored as the tertiary role. */
+internal val MaterialTheme.success: Color
+    @Composable @ReadOnlyComposable get() = colorScheme.tertiary
 
-internal val Muted: Color
-    @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onSurfaceVariant
+/** Unselected toggle buttons stand out from both the page and the cards. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+internal fun connectedToggleColors() = ToggleButtonDefaults.toggleButtonColors(
+    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+)
 
-internal val Raised: Color
-    @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.surfaceVariant
-
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun FriendarTheme(dark: Boolean, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalWarning provides if (dark) DarkWarning else LightWarning) {
-        MaterialTheme(colorScheme = if (dark) DarkColors else LightColors, content = content)
+        MaterialExpressiveTheme(
+            colorScheme = if (dark) DarkColors else LightColors,
+            motionScheme = MotionScheme.expressive(),
+            content = content,
+        )
     }
 }

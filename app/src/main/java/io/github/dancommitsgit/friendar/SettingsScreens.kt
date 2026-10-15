@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+
 package io.github.dancommitsgit.friendar
 
 import android.Manifest
@@ -13,29 +15,48 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LargeFlexibleTopAppBar
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedListItem
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,7 +66,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -145,7 +169,7 @@ private val permissionGroups = listOf(
 
 /** Bumps whenever the app comes back to the front, so status read from the system is looked at again. */
 @Composable
-private fun rememberResumeCount(): Int {
+internal fun rememberResumeCount(): Int {
     var count by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { count++ }
     return count
@@ -153,93 +177,188 @@ private fun rememberResumeCount(): Int {
 
 @Composable
 private fun SettingsPage(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
-        TextButton(onClick = onBack, modifier = Modifier.padding(horizontal = 8.dp)) {
-            Text(stringResource(R.string.back), color = Muted)
-        }
-        Text(
-            title,
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-        )
+    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    Scaffold(
+        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
+        containerColor = MaterialTheme.colorScheme.background,
+        // The list scrolls under the navigation bar; the spacer at its end clears it.
+        contentWindowInsets = WindowInsets(0),
+        topBar = {
+            LargeFlexibleTopAppBar(
+                title = { Text(title) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(AppIcons.ArrowBack, contentDescription = stringResource(R.string.back))
+                    }
+                },
+                scrollBehavior = scroll,
+            )
+        },
+    ) { padding ->
         Column(
             modifier = Modifier
-                .weight(1f)
+                .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 8.dp),
-            content = content,
+                .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            content()
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
+    }
+}
+
+/** Cards sit one step above the page so the rows read as separate pieces. */
+@Composable
+private fun rowColors() = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+
+private class GroupScope {
+    val rows = mutableListOf<@Composable (ListItemShapes) -> Unit>()
+
+    fun row(content: @Composable (ListItemShapes) -> Unit) {
+        rows += content
+    }
+}
+
+/** Rows set apart by a small gap, with the outer corners of the first and last rounded more. */
+@Composable
+private fun Group(label: String? = null, build: GroupScope.() -> Unit) {
+    val rows = GroupScope().apply(build).rows
+    Column {
+        if (label != null) {
+            Text(
+                label,
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.titleSmallEmphasized,
+                modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+            rows.forEachIndexed { index, row -> row(ListItemDefaults.segmentedShapes(index, rows.size)) }
+        }
+    }
+}
+
+@Composable
+private fun SwitchRow(shapes: ListItemShapes, title: String, detail: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+    SegmentedListItem(
+        onClick = { onChange(!checked) },
+        shapes = shapes,
+        colors = rowColors(),
+        supportingContent = if (detail != null) {
+            { Text(detail) }
+        } else {
+            null
+        },
+        trailingContent = {
+            Switch(
+                checked = checked,
+                onCheckedChange = null,
+                thumbContent = if (checked) {
+                    { Icon(AppIcons.Check, contentDescription = null, modifier = Modifier.size(SwitchDefaults.IconSize)) }
+                } else {
+                    null
+                },
+            )
+        },
+    ) { Text(title) }
+}
+
+@Composable
+private fun LinkRow(shapes: ListItemShapes, title: String, detail: String?, onClick: () -> Unit) {
+    SegmentedListItem(
+        onClick = onClick,
+        shapes = shapes,
+        colors = rowColors(),
+        supportingContent = if (detail != null) {
+            { Text(detail) }
+        } else {
+            null
+        },
+        trailingContent = {
+            Icon(
+                AppIcons.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+    ) { Text(title) }
+}
+
+@Composable
+private fun StaticRow(
+    shapes: ListItemShapes,
+    title: String,
+    detail: String?,
+    detailColor: Color = Color.Unspecified,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Surface(shape = shapes.shape, color = rowColors().containerColor) {
+        ListItem(
+            headlineContent = { Text(title) },
+            supportingContent = if (detail != null) {
+                { Text(detail, color = detailColor) }
+            } else {
+                null
+            },
+            trailingContent = trailing,
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         )
     }
 }
 
 @Composable
-private fun Item(
-    title: String,
-    detail: String?,
-    onClick: (() -> Unit)? = null,
-    trailing: @Composable () -> Unit = {},
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            if (detail != null) {
-                Text(detail, color = Muted, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-        trailing()
-    }
-    HorizontalDivider(color = Raised)
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text,
-        color = Muted,
-        style = MaterialTheme.typography.labelLarge,
-        modifier = Modifier.padding(top = 20.dp, bottom = 4.dp),
-    )
-}
-
-@Composable
-private fun <T> Choice(
+private fun <T> ChoiceRow(
+    shapes: ListItemShapes,
     title: String,
     detail: String?,
     options: List<Pair<String, T>>,
     selected: T,
     onSelect: (T) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-        Text(title, style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(8.dp))
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            options.forEachIndexed { index, (label, value) ->
-                SegmentedButton(
-                    selected = value == selected,
-                    onClick = { onSelect(value) },
-                    shape = SegmentedButtonDefaults.itemShape(index, options.size),
-                    colors = SegmentedButtonDefaults.colors(
-                        activeContainerColor = Raised,
-                        activeContentColor = OnInk,
-                        inactiveContentColor = Muted,
-                    ),
-                    label = { Text(label) },
-                )
+    val motion = MaterialTheme.motionScheme
+    Surface(shape = shapes.shape, color = rowColors().containerColor) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(motion.defaultSpatialSpec())
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+            ) {
+                options.forEachIndexed { index, (label, value) ->
+                    ToggleButton(
+                        checked = value == selected,
+                        onCheckedChange = { onSelect(value) },
+                        modifier = Modifier.weight(1f),
+                        colors = connectedToggleColors(),
+                        shapes = when (index) {
+                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                            options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                        },
+                    ) { Text(label) }
+                }
+            }
+            AnimatedContent(
+                targetState = detail,
+                transitionSpec = { fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec()) },
+                label = "detail",
+            ) { text ->
+                if (text != null) {
+                    Text(
+                        text,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
             }
         }
-        if (detail != null) {
-            Spacer(Modifier.height(6.dp))
-            Text(detail, color = Muted, style = MaterialTheme.typography.bodyMedium)
-        }
     }
-    HorizontalDivider(color = Raised)
 }
 
 @Composable
@@ -260,97 +379,118 @@ internal fun SettingsScreen(
     val missingPermissions = remember(resumed) {
         permissionGroups.filter { !it.allowed(context) }.map { context.getString(it.label) }
     }
+    val systemDark = isSystemInDarkTheme()
 
     SettingsPage(stringResource(R.string.settings), onBack) {
-        Item(
-            title = stringResource(R.string.setting_background),
-            detail = stringResource(R.string.setting_background_detail),
-            onClick = { onBackground(!state.background) },
-        ) {
-            Switch(checked = state.background, onCheckedChange = onBackground)
-        }
-        Choice(
-            title = stringResource(R.string.setting_flip),
-            detail = if (state.flipMode == FlipMode.Auto) {
-                stringResource(
-                    when (state.flipAuto) {
-                        true -> R.string.flip_auto_flipped
-                        false -> R.string.flip_auto_normal
-                        null -> R.string.flip_auto_unknown
-                    },
+        Group {
+            row {
+                SwitchRow(
+                    it,
+                    title = stringResource(R.string.setting_background),
+                    detail = stringResource(R.string.setting_background_detail),
+                    checked = state.background,
+                    onChange = onBackground,
                 )
-            } else {
-                null
-            },
-            options = listOf(
-                stringResource(R.string.flip_yes) to FlipMode.Yes,
-                stringResource(R.string.flip_no) to FlipMode.No,
-                stringResource(R.string.flip_auto) to FlipMode.Auto,
-            ),
-            selected = state.flipMode,
-            onSelect = onFlip,
-        )
-        Choice(
-            title = stringResource(R.string.setting_units),
-            detail = if (state.unitMode == UnitMode.Auto) {
-                stringResource(if (state.metric) R.string.units_auto_metric else R.string.units_auto_imperial)
-            } else {
-                null
-            },
-            options = listOf(
-                stringResource(R.string.units_auto) to UnitMode.Auto,
-                stringResource(R.string.units_metric) to UnitMode.Metric,
-                stringResource(R.string.units_imperial) to UnitMode.Imperial,
-            ),
-            selected = state.unitMode,
-            onSelect = onUnits,
-        )
-        Choice(
-            title = stringResource(R.string.setting_theme),
-            detail = if (state.themeMode == ThemeMode.System) {
-                stringResource(if (isSystemInDarkTheme()) R.string.theme_auto_dark else R.string.theme_auto_light)
-            } else {
-                null
-            },
-            options = listOf(
-                stringResource(R.string.theme_system) to ThemeMode.System,
-                stringResource(R.string.theme_light) to ThemeMode.Light,
-                stringResource(R.string.theme_dark) to ThemeMode.Dark,
-            ),
-            selected = state.themeMode,
-            onSelect = onTheme,
-        )
-        Item(
-            title = stringResource(R.string.this_phone),
-            detail = stringResource(
-                R.string.this_phone_summary,
-                features.count { it.state != FeatureState.Missing },
-                features.size,
-            ),
-            onClick = onOpenPhone,
-        ) { Chevron() }
-        Item(
-            title = stringResource(R.string.permissions),
-            detail = if (missingPermissions.isEmpty()) {
-                stringResource(R.string.permissions_all_allowed)
-            } else {
-                stringResource(R.string.permissions_missing, missingPermissions.joinToString(", "))
-            },
-            onClick = onOpenPermissions,
-        ) { Chevron() }
-        Item(
-            title = stringResource(R.string.debug_info),
-            detail = null,
-            onClick = { onDebug(!state.debug) },
-        ) {
-            Switch(checked = state.debug, onCheckedChange = onDebug)
+            }
+            row {
+                ChoiceRow(
+                    it,
+                    title = stringResource(R.string.setting_flip),
+                    detail = if (state.flipMode == FlipMode.Auto) {
+                        stringResource(
+                            when (state.flipAuto) {
+                                true -> R.string.flip_auto_flipped
+                                false -> R.string.flip_auto_normal
+                                null -> R.string.flip_auto_unknown
+                            },
+                        )
+                    } else {
+                        null
+                    },
+                    options = listOf(
+                        stringResource(R.string.flip_yes) to FlipMode.Yes,
+                        stringResource(R.string.flip_no) to FlipMode.No,
+                        stringResource(R.string.flip_auto) to FlipMode.Auto,
+                    ),
+                    selected = state.flipMode,
+                    onSelect = onFlip,
+                )
+            }
+            row {
+                ChoiceRow(
+                    it,
+                    title = stringResource(R.string.setting_units),
+                    detail = if (state.unitMode == UnitMode.Auto) {
+                        stringResource(if (state.metric) R.string.units_auto_metric else R.string.units_auto_imperial)
+                    } else {
+                        null
+                    },
+                    options = listOf(
+                        stringResource(R.string.units_auto) to UnitMode.Auto,
+                        stringResource(R.string.units_metric) to UnitMode.Metric,
+                        stringResource(R.string.units_imperial) to UnitMode.Imperial,
+                    ),
+                    selected = state.unitMode,
+                    onSelect = onUnits,
+                )
+            }
+            row {
+                ChoiceRow(
+                    it,
+                    title = stringResource(R.string.setting_theme),
+                    detail = if (state.themeMode == ThemeMode.System) {
+                        stringResource(if (systemDark) R.string.theme_auto_dark else R.string.theme_auto_light)
+                    } else {
+                        null
+                    },
+                    options = listOf(
+                        stringResource(R.string.theme_system) to ThemeMode.System,
+                        stringResource(R.string.theme_light) to ThemeMode.Light,
+                        stringResource(R.string.theme_dark) to ThemeMode.Dark,
+                    ),
+                    selected = state.themeMode,
+                    onSelect = onTheme,
+                )
+            }
+        }
+        Group {
+            row {
+                LinkRow(
+                    it,
+                    title = stringResource(R.string.this_phone),
+                    detail = stringResource(
+                        R.string.this_phone_summary,
+                        features.count { f -> f.state != FeatureState.Missing },
+                        features.size,
+                    ),
+                    onClick = onOpenPhone,
+                )
+            }
+            row {
+                LinkRow(
+                    it,
+                    title = stringResource(R.string.permissions),
+                    detail = if (missingPermissions.isEmpty()) {
+                        stringResource(R.string.permissions_all_allowed)
+                    } else {
+                        stringResource(R.string.permissions_missing, missingPermissions.joinToString(", "))
+                    },
+                    onClick = onOpenPermissions,
+                )
+            }
+        }
+        Group {
+            row {
+                SwitchRow(
+                    it,
+                    title = stringResource(R.string.debug_info),
+                    detail = null,
+                    checked = state.debug,
+                    onChange = onDebug,
+                )
+            }
         }
     }
-}
-
-@Composable
-private fun Chevron() {
-    Text("›", color = Muted, style = MaterialTheme.typography.headlineSmall)
 }
 
 @Composable
@@ -365,28 +505,52 @@ internal fun PhoneScreen(onBack: () -> Unit) {
     val features = remember(resumed, uwbOn) { phoneFeatures(context, uwbOn) }
 
     SettingsPage(stringResource(R.string.this_phone), onBack) {
-        SectionLabel(stringResource(R.string.section_ranging))
-        features.filter { !it.direction }.forEach { FeatureRow(it) }
-        SectionLabel(stringResource(R.string.section_direction))
-        features.filter { it.direction }.forEach { FeatureRow(it) }
+        Group(stringResource(R.string.section_ranging)) {
+            features.filter { !it.direction }.forEach { feature -> row { FeatureRow(it, feature) } }
+        }
+        Group(stringResource(R.string.section_direction)) {
+            features.filter { it.direction }.forEach { feature -> row { FeatureRow(it, feature) } }
+        }
     }
 }
 
 @Composable
-private fun FeatureRow(feature: Feature) {
-    val (text, color) = when (feature.state) {
-        FeatureState.Supported -> R.string.feature_supported to Green
-        FeatureState.Missing -> R.string.feature_missing to Muted
-        FeatureState.Off -> R.string.feature_off to Amber
-    }
-    Item(stringResource(feature.label), stringResource(feature.detail)) {
-        StatusText(stringResource(text), color)
+private fun FeatureRow(shapes: ListItemShapes, feature: Feature) {
+    val scheme = MaterialTheme.colorScheme
+    val status = stringResource(
+        when (feature.state) {
+            FeatureState.Supported -> R.string.feature_supported
+            FeatureState.Missing -> R.string.feature_missing
+            FeatureState.Off -> R.string.feature_off
+        },
+    )
+    StaticRow(
+        shapes,
+        title = stringResource(feature.label),
+        detail = if (feature.state == FeatureState.Supported) stringResource(feature.detail) else status,
+        detailColor = if (feature.state == FeatureState.Off) MaterialTheme.warning else Color.Unspecified,
+    ) {
+        when (feature.state) {
+            FeatureState.Supported -> StatusIcon(AppIcons.Check, status, scheme.tertiaryContainer, scheme.onTertiaryContainer)
+            FeatureState.Missing -> StatusIcon(AppIcons.Close, status, scheme.surfaceContainerHighest, scheme.onSurfaceVariant)
+            FeatureState.Off -> StatusIcon(
+                AppIcons.Warning,
+                status,
+                MaterialTheme.warning.copy(alpha = 0.18f),
+                MaterialTheme.warning,
+            )
+        }
     }
 }
 
 @Composable
-private fun StatusText(text: String, color: Color) {
-    Text(text, color = color, style = MaterialTheme.typography.bodyMedium)
+private fun StatusIcon(icon: ImageVector, description: String, container: Color, tint: Color) {
+    Box(
+        modifier = Modifier.size(32.dp).clip(CircleShape).background(container),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(20.dp))
+    }
 }
 
 @Composable
@@ -416,21 +580,33 @@ internal fun PermissionsScreen(onBack: () -> Unit) {
         }
     }
 
+    val scheme = MaterialTheme.colorScheme
+    val allowedLabel = stringResource(R.string.permission_allowed)
     SettingsPage(stringResource(R.string.permissions), onBack) {
-        permissionGroups.forEach { group ->
-            val allowed = remember(resumed, changes) { group.allowed(context) }
-            Item(stringResource(group.label), stringResource(group.detail)) {
-                if (allowed) {
-                    StatusText(stringResource(R.string.permission_allowed), Green)
-                } else {
-                    OutlinedButton(onClick = { request(group) }) {
-                        Text(stringResource(R.string.permission_allow))
+        Group {
+            permissionGroups.forEach { group ->
+                row { shapes ->
+                    val allowed = remember(resumed, changes) { group.allowed(context) }
+                    StaticRow(
+                        shapes,
+                        title = stringResource(group.label),
+                        detail = stringResource(group.detail),
+                    ) {
+                        if (allowed) {
+                            StatusIcon(AppIcons.Check, allowedLabel, scheme.tertiaryContainer, scheme.onTertiaryContainer)
+                        } else {
+                            Button(onClick = { request(group) }, shapes = ButtonDefaults.shapes()) {
+                                Text(stringResource(R.string.permission_allow))
+                            }
+                        }
                     }
                 }
             }
         }
-        TextButton(onClick = { openAppSettings(context) }, modifier = Modifier.padding(top = 8.dp)) {
-            Text(stringResource(R.string.open_settings))
+        Group {
+            row {
+                LinkRow(it, title = stringResource(R.string.open_settings), detail = null) { openAppSettings(context) }
+            }
         }
     }
 }
