@@ -106,7 +106,16 @@ class AwareLink(private val context: Context, private val listener: AwareListene
         session = null
     }
 
-    private fun attach() {
+    /** The framework throws SecurityException from attach, publish and subscribe when a permission is missing. */
+    private inline fun whenAllowed(block: () -> Unit) {
+        try {
+            block()
+        } catch (_: SecurityException) {
+            listener.onAwareLog("Wi-Fi Aware: permission missing")
+        }
+    }
+
+    private fun attach() = whenAllowed {
         manager?.attach(
             object : AttachCallback() {
                 override fun onAttached(session: WifiAwareSession) {
@@ -128,7 +137,7 @@ class AwareLink(private val context: Context, private val listener: AwareListene
         )
     }
 
-    private fun publish(session: WifiAwareSession) {
+    private fun publish(session: WifiAwareSession) = whenAllowed {
         val config = PublishConfig.Builder()
             .setServiceName(SERVICE_NAME)
             .setRangingEnabled(true)
@@ -153,7 +162,7 @@ class AwareLink(private val context: Context, private val listener: AwareListene
         )
     }
 
-    private fun subscribe(session: WifiAwareSession) {
+    private fun subscribe(session: WifiAwareSession) = whenAllowed {
         val config = SubscribeConfig.Builder()
             .setServiceName(SERVICE_NAME)
             .build()
