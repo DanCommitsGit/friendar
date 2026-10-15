@@ -67,3 +67,7 @@ Releases are APKs on the GitHub Releases page, built and published by the Releas
 The workflow signs with a release key held in repository secrets, because a runner generates a new debug key every run and Android refuses to update an install signed with a different key. Local builds still use the debug key. Losing the release key means existing installs can only be reinstalled, not updated.
 
 semantic-release picks the version from conventional commit messages and writes the release notes, with the build running inside its prepare step so the tag, notes and APK come from one run. It creates no commit and no changelog file, so the release notes live only on the GitHub release. The version name and code come from the version it picks, so `1.2.3` becomes code 10203 and the minor and patch parts must stay under 100.
+
+## Wi-Fi Aware works without the location permission
+
+`NEARBY_WIFI_DEVICES` is declared with `neverForLocation`. Without the flag, Android 13 and later also demand `ACCESS_FINE_LOCATION` for `attach`, `publish` and `subscribe`, and throw `SecurityException` when it is denied. The app only uses Wi-Fi to measure the distance to the other phone; position comes from GPS. Android 12 has no `NEARBY_WIFI_DEVICES` and still needs location for Aware, so `AwareLink` catches the exception and the app carries on with UWB and BLE.
