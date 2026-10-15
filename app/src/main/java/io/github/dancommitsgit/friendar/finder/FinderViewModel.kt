@@ -9,14 +9,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
-import androidx.core.uwb.RangingParameters
 import androidx.core.uwb.RangingPosition
-import androidx.core.uwb.RangingResult
-import androidx.core.uwb.UwbAddress
-import androidx.core.uwb.UwbClientSessionScope
-import androidx.core.uwb.UwbComplexChannel
-import androidx.core.uwb.UwbDevice
-import androidx.core.uwb.UwbManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.dancommitsgit.friendar.LocatorService
@@ -39,7 +32,6 @@ import io.github.dancommitsgit.friendar.link.Message
 import io.github.dancommitsgit.friendar.link.Protocol
 import io.github.dancommitsgit.friendar.sensors.LocationTracker
 import io.github.dancommitsgit.friendar.sensors.Orientation
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,42 +70,27 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
 
     private var host: BleHost? = null
     private var joiner: BleJoiner? = null
-    private var rangingJob: Job? = null
     private var watchdogJob: Job? = null
     private var tickerJob: Job? = null
-    private var attemptJob: Job? = null
-    private var pendingScope: UwbClientSessionScope? = null
 
     private var linkId = 0
     private var linked = false
     private var lastPeerMessageMs = 0L
-    private var roleResendJob: Job? = null
-    private var roleAppliedFor = -1
-    private var attempt = 0
-    private var failedAttempts = 0
-    private var iAmController = false
-    private var rangingStarted = false
-    private var lastPositionMs = 0L
 
-    /** Which side was UWB controller when ranging last worked; the host keeps using it. */
-    private var workingControllerIsHost: Boolean? = null
-
-    private val uwbManager: UwbManager? by lazy {
-        val pm = getApplication<Application>().packageManager
-        if (!pm.hasSystemFeature(PackageManager.FEATURE_UWB)) {
-            null
-        } else {
-            runCatching { UwbManager.createInstance(getApplication()) }.getOrNull()
-        }
-    }
+    private val uwb = UwbSession(
+        context = app,
+        viewScope = viewModelScope,
+        state = _state,
+        send = ::send,
+        log = ::log,
+        resetFilters = ::resetFilters,
+        forgetDirection = tracker::forgetDirection,
+        onPosition = ::onPosition,
+    )
 
     fun start() {
         stop()
         linkId = Random.nextInt()
-        attempt = 0
-        failedAttempts = 0
-        rangingStarted = false
-        workingControllerIsHost = null
         _state.value = freshState(Phase.Waiting)
         log("${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}")
         val pm = getApplication<Application>().packageManager
@@ -122,7 +99,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
                 "Wi-Fi RTT: ${pm.hasSystemFeature(PackageManager.FEATURE_WIFI_RTT)}",
         )
         orientation.start()
-        logRangingCapabilities()
+        uwb.logPlatformCapabilities()
         if (_state.value.background) startService()
         aware = AwareLink(getApplication(), this).also { it.start() }
         locations = LocationTracker(getApplication(), ::onFix).also {
@@ -260,22 +237,11 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
 
     private fun closeLink() {
         linked = false
-        rangingJob?.cancel()
-        rangingJob = null
-        attemptJob?.cancel()
-        attemptJob = null
-        roleResendJob?.cancel()
-        roleResendJob = null
-        roleAppliedFor = -1
-        pendingScope = null
+        uwb.reset()
         host?.stop()
         host = null
         joiner?.stop()
         joiner = null
-        rangingStarted = false
-        attempt = 0
-        failedAttempts = 0
-        workingControllerIsHost = null
         resetFilters()
         signal.reset()
     }
@@ -357,7 +323,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
                     hint = null,
                 )
             }
-            if (asHost) startAttempt(0)
+            if (asHost) uwb.startAttempt(0)
         }
     }
 
@@ -367,23 +333,13 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
             if (!linked) return@launch
             lastPeerMessageMs = SystemClock.elapsedRealtime()
             when (message) {
-                is Message.Role -> if (message.attempt != roleAppliedFor) {
-                    roleAppliedFor = message.attempt
-                    attempt = message.attempt
-                    applyRole(controller = !message.controllerIsHost)
-                }
-
-                is Message.Join ->
-                    if (iAmController && message.attempt == attempt) startAsController(message)
-
-                is Message.Start ->
-                    if (!iAmController && message.attempt == attempt) startAsControlee(message)
-
-                is Message.Retry ->
-                    if (message.attempt == attempt) onAttemptFailed("peer asked to retry")
+                is Message.Role -> uwb.onRole(message)
+                is Message.Join -> uwb.onJoin(message)
+                is Message.Start -> uwb.onStart(message)
+                is Message.Retry -> uwb.onRetry(message)
 
                 is Message.Rssi -> onSignal(message.dbm)
-                Message.NoUwb -> useSignalStrengthOnly(string(R.string.peer_no_uwb))
+                Message.NoUwb -> uwb.useSignalStrengthOnly(string(R.string.peer_no_uwb))
                 is Message.Location -> onFriendLocation(message)
                 Message.Heartbeat -> Unit
             }
@@ -483,27 +439,6 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         }
     }
 
-    private fun logRangingCapabilities() {
-        if (Build.VERSION.SDK_INT < 36) return
-        runCatching {
-            val app = getApplication<Application>()
-            val manager = app.getSystemService(android.ranging.RangingManager::class.java) ?: return
-            manager.registerCapabilitiesCallback(app.mainExecutor) { capabilities ->
-                val names = mapOf(
-                    android.ranging.RangingManager.UWB to "UWB",
-                    android.ranging.RangingManager.BLE_CS to "Bluetooth channel sounding",
-                    android.ranging.RangingManager.WIFI_NAN_RTT to "Wi-Fi RTT",
-                    android.ranging.RangingManager.BLE_RSSI to "Bluetooth RSSI",
-                )
-                val text = capabilities.technologyAvailability.entries.joinToString(", ") {
-                    val state = if (it.value == android.ranging.RangingCapabilities.ENABLED) "yes" else "no"
-                    "${names[it.key] ?: it.key}: $state"
-                }
-                log("Android ranging: $text")
-            }
-        }
-    }
-
     override fun onRssi(dbm: Int) {
         viewModelScope.launch { onSignal(dbm) }
         send(Message.Rssi(dbm))
@@ -548,223 +483,10 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         checkFlip(now)
         tracker.calibrate(now, _state.value.distanceM)
         updateMap()
-        val s = _state.value
-        if (s.phase != Phase.Ranging || !rangingStarted) return
-        val silentMs = SystemClock.elapsedRealtime() - lastPositionMs
-        if (silentMs > UWB_STALE_MS && s.distanceM != null) {
-            _state.update { it.copy(distanceM = null, directionLive = false) }
-        }
-        if (silentMs > UWB_FORGET_DIRECTION_MS) tracker.forgetDirection()
-        if (s.role == Role.Host && silentMs > UWB_RESTART_MS) {
-            log("UWB: no measurements for ${silentMs / 1000}s, restarting")
-            startAttempt(attempt + 1)
-        }
-    }
-
-    /**
-     * Some phone pairs only range when a particular one is the UWB controller, so the
-     * host tries each assignment in turn until a measurement arrives, then sticks with it.
-     */
-    private fun startAttempt(n: Int) {
-        attempt = n and 0xFF
-        val controllerIsHost = workingControllerIsHost ?: (attempt % 2 == 0)
-        sendRole(attempt, controllerIsHost)
-        val previous = attemptJob
-        attemptJob = viewModelScope.launch {
-            delay(ATTEMPT_TIMEOUT_MS)
-            onAttemptFailed("no measurement after ${ATTEMPT_TIMEOUT_MS / 1000}s")
-        }
-        previous?.cancel()
-        applyRole(controller = controllerIsHost)
-    }
-
-    /** A notification sent right after the joiner subscribes can be dropped, so repeat it until ranging starts. */
-    private fun sendRole(forAttempt: Int, controllerIsHost: Boolean) {
-        roleResendJob?.cancel()
-        roleResendJob = viewModelScope.launch {
-            repeat(ROLE_SENDS) {
-                if (rangingStarted || attempt != forAttempt) return@launch
-                send(Message.Role(forAttempt, controllerIsHost))
-                delay(ROLE_RESEND_MS)
-            }
-        }
-    }
-
-    private fun scheduleAttempt(n: Int) {
-        attemptJob?.cancel()
-        attemptJob = viewModelScope.launch {
-            delay(RETRY_DELAY_MS)
-            startAttempt(n)
-        }
-    }
-
-    private fun onAttemptFailed(reason: String) {
-        if (rangingStarted) return
-        if (_state.value.role == Role.Joiner) {
-            log("UWB: attempt ${attempt + 1} failed ($reason), asking host to retry")
-            send(Message.Retry(attempt))
-            return
-        }
-        log("UWB: attempt ${attempt + 1} failed ($reason)")
-        failedAttempts++
-        if (failedAttempts >= QUIET_AFTER_ATTEMPTS) {
-            _state.update {
-                it.copy(uwbActive = false, message = string(R.string.uwb_not_starting))
-            }
-        }
-        scheduleAttempt(attempt + 1)
-    }
-
-    private fun applyRole(controller: Boolean) {
-        rangingJob?.cancel()
-        pendingScope = null
-        rangingStarted = false
-        resetFilters()
-        iAmController = controller
-        log("UWB: attempt ${attempt + 1}, this phone is the ${if (controller) "controller" else "controlee"}")
-        val thisAttempt = attempt
-        viewModelScope.launch {
-            try {
-                val reason = uwbUnavailableReason()
-                if (reason != null) {
-                    send(Message.NoUwb)
-                    useSignalStrengthOnly(reason)
-                    return@launch
-                }
-                if (!controller) {
-                    val scope = uwbManager!!.controleeSessionScope()
-                    if (thisAttempt != attempt) return@launch
-                    pendingScope = scope
-                    logCapabilities(scope)
-                    send(Message.Join(thisAttempt, scope.localAddress.address))
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                log("UWB: ${e.javaClass.simpleName}: ${e.message}")
-                onAttemptFailed("error ${e.message ?: e.javaClass.simpleName}")
-            }
-        }
-    }
-
-    private suspend fun uwbUnavailableReason(): String? {
-        val manager = uwbManager ?: return string(R.string.uwb_no_hardware)
-        return if (manager.isAvailable()) null else string(R.string.uwb_off)
-    }
-
-    private fun logCapabilities(scope: UwbClientSessionScope) {
-        val c = scope.rangingCapabilities
-        log(
-            "UWB: distance=${c.isDistanceSupported} azimuth=${c.isAzimuthalAngleSupported} " +
-                "elevation=${c.isElevationAngleSupported} channels=${c.supportedChannels}",
-        )
-    }
-
-    private fun useSignalStrengthOnly(reason: String) {
-        log("UWB unavailable: $reason")
-        attemptJob?.cancel()
-        attemptJob = null
-        _state.update { it.copy(phase = Phase.Ranging, uwbActive = false, message = reason) }
-    }
-
-    private suspend fun startAsController(join: Message.Join) {
-        try {
-            val scope = uwbManager!!.controllerSessionScope()
-            if (join.attempt != attempt) return
-            logCapabilities(scope)
-            val channel = scope.uwbComplexChannel
-            log("UWB: channel ${channel.channel}, preamble ${channel.preambleIndex}")
-            val sessionId = Random.nextInt()
-            val key = Random.nextBytes(Protocol.SESSION_KEY_SIZE)
-            val params = RangingParameters(
-                uwbConfigType = RangingParameters.CONFIG_UNICAST_DS_TWR,
-                sessionId = sessionId,
-                subSessionId = 0,
-                sessionKeyInfo = key,
-                subSessionKeyInfo = null,
-                complexChannel = channel,
-                peerDevices = listOf(UwbDevice(UwbAddress(join.uwbAddress))),
-                updateRateType = RangingParameters.RANGING_UPDATE_RATE_FREQUENT,
-            )
-            send(
-                Message.Start(
-                    attempt = attempt,
-                    uwbAddress = scope.localAddress.address,
-                    channel = channel.channel,
-                    preambleIndex = channel.preambleIndex,
-                    sessionId = sessionId,
-                    sessionKey = key,
-                ),
-            )
-            _state.update { it.copy(phase = Phase.Ranging, uwbActive = true, message = null) }
-            range(scope, params)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            log("UWB: ${e.javaClass.simpleName}: ${e.message}")
-            onAttemptFailed("error ${e.message ?: e.javaClass.simpleName}")
-        }
-    }
-
-    private fun startAsControlee(start: Message.Start) {
-        val scope = pendingScope ?: return
-        try {
-            log("UWB: got session, channel ${start.channel}")
-            val params = RangingParameters(
-                uwbConfigType = RangingParameters.CONFIG_UNICAST_DS_TWR,
-                sessionId = start.sessionId,
-                subSessionId = 0,
-                sessionKeyInfo = start.sessionKey,
-                subSessionKeyInfo = null,
-                complexChannel = UwbComplexChannel(start.channel, start.preambleIndex),
-                peerDevices = listOf(UwbDevice(UwbAddress(start.uwbAddress))),
-                updateRateType = RangingParameters.RANGING_UPDATE_RATE_FREQUENT,
-            )
-            _state.update { it.copy(phase = Phase.Ranging, uwbActive = true, message = null) }
-            range(scope, params)
-        } catch (e: Exception) {
-            log("UWB: ${e.javaClass.simpleName}: ${e.message}")
-            onAttemptFailed("error ${e.message ?: e.javaClass.simpleName}")
-        }
-    }
-
-    private fun range(scope: UwbClientSessionScope, params: RangingParameters) {
-        rangingJob?.cancel()
-        rangingJob = viewModelScope.launch {
-            try {
-                scope.prepareSession(params).collect { result ->
-                    when (result) {
-                        is RangingResult.RangingResultPosition -> onPosition(result.position)
-                        is RangingResult.RangingResultPeerDisconnected -> {
-                            log("UWB: peer out of range (${result.reason})")
-                            _state.update { it.copy(directionLive = false, distanceM = null) }
-                        }
-
-                        is RangingResult.RangingResultInitialized -> log("UWB: session started")
-                        is RangingResult.RangingResultFailure -> {
-                            log("UWB: ranging failed (${result.reason})")
-                            onAttemptFailed("ranging failure ${result.reason}")
-                        }
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                log("UWB: ${e.javaClass.simpleName}: ${e.message}")
-                onAttemptFailed("error ${e.message ?: e.javaClass.simpleName}")
-            }
-        }
+        uwb.tick()
     }
 
     private fun onPosition(position: RangingPosition) {
-        lastPositionMs = SystemClock.elapsedRealtime()
-        if (!rangingStarted) {
-            rangingStarted = true
-            failedAttempts = 0
-            attemptJob?.cancel()
-            workingControllerIsHost = if (_state.value.role == Role.Host) iAmController else !iAmController
-            log("UWB: ranging")
-        }
         val rawDistance = position.distance?.value
         val distance = rawDistance?.let(distanceFilter::add)
         // Erratic distance readings are typical of reflected signals, so trust their angles less.
@@ -784,7 +506,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         )
         if (azimuth != null && r != null) {
             val result = tracker.addUwbReading(
-                azimuth, elevation, r, _state.value.mirror, distanceTrust, lastPositionMs,
+                azimuth, elevation, r, _state.value.mirror, distanceTrust, uwb.lastPositionMs,
             )
             raw += String.format(
                 Locale.US, " off=%.0f w=%.2f%s",
@@ -838,18 +560,10 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         const val MAX_LOG_LINES = 20
         const val WATCHDOG_START_MS = 12_000L
         const val PEER_SILENT_MS = 8_000L
-        const val ROLE_SENDS = 5
-        const val ROLE_RESEND_MS = 1_500L
         const val WATCHDOG_INTERVAL_MS = 4_000L
         const val TICK_MS = 1_000L
-        const val ATTEMPT_TIMEOUT_MS = 12_000L
-        const val RETRY_DELAY_MS = 2_000L
-        const val QUIET_AFTER_ATTEMPTS = 2
         const val SHARE_INTERVAL_MS = 2_000L
         const val AWARE_STALE_MS = 5_000L
-        const val UWB_STALE_MS = 3_000L
-        const val UWB_FORGET_DIRECTION_MS = 30_000L
-        const val UWB_RESTART_MS = 20_000L
         const val DISTANCE_JITTER_M = 1.5f
         const val ARROW_INTERVAL_MS = 33L
     }
