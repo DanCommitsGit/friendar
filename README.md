@@ -1,12 +1,13 @@
 # Friendar
 
+[![CI](https://github.com/DanCommitsGit/friendar/actions/workflows/ci.yml/badge.svg)](https://github.com/DanCommitsGit/friendar/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/DanCommitsGit/friendar)](https://github.com/DanCommitsGit/friendar/releases/latest)
+
 Friendar points you at a friend's phone when you are both nearby. Open the app on two phones, tap Find, and follow the arrow.
 
-Distance and direction come from ultra-wideband (UWB) when both phones have it. When UWB has no clear line, distance falls back to Wi-Fi Aware ranging and then Bluetooth signal strength, and direction falls back to GPS and the compass. There is no server and no account.
+## Install
 
-## Requirements
-
-Two Android 12 or newer phones with Bluetooth. UWB, Wi-Fi Aware and GPS improve the result but are optional, and a page in the app lists which of them each phone supports.
+Download and install `friendar-<version>.apk` from the [latest release](https://github.com/DanCommitsGit/friendar/releases/latest) on Android 12 or newer.
 
 ## Privacy
 
@@ -19,9 +20,7 @@ There is no pairing or encryption. Any phone nearby running Friendar with the ap
 ./gradlew testDebugUnitTest
 ```
 
-This needs JDK 17 and the Android SDK with platform 36 and build tools 35.0.0. The APK is written to `app/build/outputs/apk/debug/`.
-
-The unit tests cover the math. The Bluetooth, UWB, Wi-Fi Aware and sensor code has only been checked on a Samsung S22 Ultra and a Samsung S23 Ultra.
+You need JDK 17 and the Android SDK with platform 36 and build tools 35.0.0. The APK is written to `app/build/outputs/apk/debug/`.
 
 ## Docs
 
