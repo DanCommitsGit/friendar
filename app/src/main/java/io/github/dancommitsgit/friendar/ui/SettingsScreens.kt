@@ -383,6 +383,37 @@ internal fun SettingsScreen(
     val missingPermissions = remember(resumed) {
         permissionGroups.filter { !it.allowed(context) }.map { context.getString(it.label) }
     }
+    SettingsContent(
+        state = state,
+        featuresAvailable = features.count { it.state != FeatureState.Missing },
+        featuresTotal = features.size,
+        missingPermissions = missingPermissions,
+        onBack = onBack,
+        onFlip = onFlip,
+        onUnits = onUnits,
+        onTheme = onTheme,
+        onBackground = onBackground,
+        onDebug = onDebug,
+        onOpenPhone = onOpenPhone,
+        onOpenPermissions = onOpenPermissions,
+    )
+}
+
+@Composable
+private fun SettingsContent(
+    state: FinderState,
+    featuresAvailable: Int,
+    featuresTotal: Int,
+    missingPermissions: List<String>,
+    onBack: () -> Unit,
+    onFlip: (FlipMode) -> Unit,
+    onUnits: (UnitMode) -> Unit,
+    onTheme: (ThemeMode) -> Unit,
+    onBackground: (Boolean) -> Unit,
+    onDebug: (Boolean) -> Unit,
+    onOpenPhone: () -> Unit,
+    onOpenPermissions: () -> Unit,
+) {
     val systemDark = isSystemInDarkTheme()
 
     SettingsPage(stringResource(R.string.settings), onBack) {
@@ -464,8 +495,8 @@ internal fun SettingsScreen(
                     title = stringResource(R.string.this_phone),
                     detail = stringResource(
                         R.string.this_phone_summary,
-                        features.count { f -> f.state != FeatureState.Missing },
-                        features.size,
+                        featuresAvailable,
+                        featuresTotal,
                     ),
                     onClick = onOpenPhone,
                 )
@@ -507,7 +538,11 @@ internal fun PhoneScreen(onBack: () -> Unit) {
         uwbOn = if (hasUwb) runCatching { UwbManager.createInstance(context).isAvailable() }.getOrNull() else null
     }
     val features = remember(resumed, uwbOn) { phoneFeatures(context, uwbOn) }
+    PhoneContent(features, onBack)
+}
 
+@Composable
+private fun PhoneContent(features: List<Feature>, onBack: () -> Unit) {
     SettingsPage(stringResource(R.string.this_phone), onBack) {
         Group(stringResource(R.string.section_ranging)) {
             features.filter { !it.direction }.forEach { feature -> row { FeatureRow(it, feature) } }
@@ -584,22 +619,37 @@ internal fun PermissionsScreen(onBack: () -> Unit) {
         }
     }
 
+    val allowed = remember(resumed, changes) { permissionGroups.associateWith { it.allowed(context) } }
+    PermissionsContent(
+        allowed = allowed,
+        onRequest = ::request,
+        onOpenSettings = { openAppSettings(context) },
+        onBack = onBack,
+    )
+}
+
+@Composable
+private fun PermissionsContent(
+    allowed: Map<PermissionGroup, Boolean>,
+    onRequest: (PermissionGroup) -> Unit,
+    onOpenSettings: () -> Unit,
+    onBack: () -> Unit,
+) {
     val scheme = MaterialTheme.colorScheme
     val allowedLabel = stringResource(R.string.permission_allowed)
     SettingsPage(stringResource(R.string.permissions), onBack) {
         Group {
             permissionGroups.forEach { group ->
                 row { shapes ->
-                    val allowed = remember(resumed, changes) { group.allowed(context) }
                     StaticRow(
                         shapes,
                         title = stringResource(group.label),
                         detail = stringResource(group.detail),
                     ) {
-                        if (allowed) {
+                        if (allowed[group] == true) {
                             StatusIcon(AppIcons.Check, allowedLabel, scheme.tertiaryContainer, scheme.onTertiaryContainer)
                         } else {
-                            Button(onClick = { request(group) }, shapes = ButtonDefaults.shapes()) {
+                            Button(onClick = { onRequest(group) }, shapes = ButtonDefaults.shapes()) {
                                 Text(stringResource(R.string.permission_allow))
                             }
                         }
@@ -609,8 +659,61 @@ internal fun PermissionsScreen(onBack: () -> Unit) {
         }
         Group {
             row {
-                LinkRow(it, title = stringResource(R.string.open_settings), detail = null) { openAppSettings(context) }
+                LinkRow(it, title = stringResource(R.string.open_settings), detail = null, onClick = onOpenSettings)
             }
         }
+    }
+}
+
+
+@PhonePreviews
+@Composable
+private fun SettingsPreview() {
+    PreviewTheme {
+        SettingsContent(
+            state = FinderState(),
+            featuresAvailable = 5,
+            featuresTotal = 6,
+            missingPermissions = listOf("Nearby devices"),
+            onBack = {},
+            onFlip = {},
+            onUnits = {},
+            onTheme = {},
+            onBackground = {},
+            onDebug = {},
+            onOpenPhone = {},
+            onOpenPermissions = {},
+        )
+    }
+}
+
+@PhonePreviews
+@Composable
+private fun PhonePreview() {
+    PreviewTheme {
+        PhoneContent(
+            features = listOf(
+                Feature(R.string.feature_bluetooth, R.string.feature_bluetooth_detail, FeatureState.Supported),
+                Feature(R.string.feature_uwb, R.string.feature_uwb_detail, FeatureState.Off),
+                Feature(R.string.feature_wifi_aware, R.string.feature_wifi_aware_detail, FeatureState.Supported),
+                Feature(R.string.feature_wifi_ranging, R.string.feature_wifi_ranging_detail, FeatureState.Missing),
+                Feature(R.string.feature_gps, R.string.feature_gps_detail, FeatureState.Supported, direction = true),
+                Feature(R.string.feature_compass, R.string.feature_compass_detail, FeatureState.Supported, direction = true),
+            ),
+            onBack = {},
+        )
+    }
+}
+
+@PhonePreviews
+@Composable
+private fun PermissionsPreview() {
+    PreviewTheme {
+        PermissionsContent(
+            allowed = permissionGroups.mapIndexed { index, group -> group to (index != 0) }.toMap(),
+            onRequest = {},
+            onOpenSettings = {},
+            onBack = {},
+        )
     }
 }

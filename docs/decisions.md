@@ -44,6 +44,10 @@ There is no navigation library. `PageHost` animates pushes and pops and follows 
 
 Connected button groups, the loading indicator, flexible app bars and segmented list items are not in 1.4.0, which is what the Compose BOM maps to, so material3 is pinned on its own. Every 1.5.0 build from alpha19 on needs compileSdk 37 and Android Gradle plugin 9.1 or later, which is why the project is on AGP 9.3 and Gradle 9.5. AGP 9 compiles Kotlin itself, so only the Compose compiler plugin is applied. Move to the stable 1.5.0 when it is released.
 
+## Previews live next to the screens
+
+Compose previews sit at the bottom of the file of the screen they render, so private composables can be previewed and a change and its preview stay in one place. `PreviewSupport.kt` holds the shared annotation and theme wrapper. `ui-tooling-preview` is a normal dependency because the annotation is needed to compile, and `ui-tooling`, which renders them, is debug only. Previews can't construct a view model or read the system, so a screen that needs either is split into a stateful wrapper and a stateless `*Content` composable that takes plain values, and the previews call the stateless one. Add a preview when adding a screen or a state.
+
 ## Technical readings sit behind the debug switch
 
 Measurement sources, raw readings and the log appear only when Debug info is on in settings. The map caption is shown only when the position is less trustworthy than usual.

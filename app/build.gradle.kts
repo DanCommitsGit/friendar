@@ -68,5 +68,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("androidx.core.uwb:uwb:1.0.0")
 
+    // The @Preview annotation is needed to compile; the preview renderer is debug only.
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+
     testImplementation("junit:junit:4.13.2")
 }

@@ -62,8 +62,11 @@ import androidx.compose.ui.unit.sp
 import io.github.dancommitsgit.friendar.R
 import io.github.dancommitsgit.friendar.finder.FinderState
 import io.github.dancommitsgit.friendar.finder.Phase
-import io.github.dancommitsgit.friendar.fusion.RangeSource
 import io.github.dancommitsgit.friendar.fusion.DirectionSource
+import io.github.dancommitsgit.friendar.fusion.EstimateSource
+import io.github.dancommitsgit.friendar.fusion.FriendEstimate
+import io.github.dancommitsgit.friendar.fusion.RangeSource
+import io.github.dancommitsgit.friendar.fusion.Trend
 import io.github.dancommitsgit.friendar.fusion.isClose
 
 /**
@@ -374,3 +377,91 @@ private fun SearchContent(
 }
 
 private enum class Graphic { Arrow, Map, Waiting }
+
+
+@Composable
+private fun Main(state: FinderState, showMap: Boolean = false, permissionDenied: Boolean = false) {
+    PreviewTheme {
+        MainScreen(
+            state = state,
+            showMap = showMap,
+            onShowMap = {},
+            permissionDenied = permissionDenied,
+            onStart = {},
+            onStop = {},
+            onMetric = {},
+            onSettings = {},
+        )
+    }
+}
+
+private val uwbRanging = FinderState(
+    phase = Phase.Ranging,
+    distanceM = 4.2f,
+    rangeM = 4.2f,
+    rangeSource = RangeSource.Uwb,
+    arrowDeg = 35f,
+    directionLive = true,
+    arrowSource = DirectionSource.Uwb,
+    uwbActive = true,
+    friendGps = true,
+    headingDeg = 20f,
+    friend = FriendEstimate(eastM = 2.4f, northM = 3.4f, sigmaM = 0.8f, source = EstimateSource.RangeAndBearing),
+)
+
+@PhonePreviews
+@Composable
+private fun MainIdlePreview() = Main(FinderState())
+
+@PhonePreviews
+@Composable
+private fun MainPermissionDeniedPreview() = Main(FinderState(), permissionDenied = true)
+
+@PhonePreviews
+@Composable
+private fun MainWaitingPreview() = Main(FinderState(phase = Phase.Waiting))
+
+@PhonePreviews
+@Composable
+private fun MainFailedPreview() = Main(FinderState(phase = Phase.Failed, message = "Bluetooth is turned off"))
+
+@PhonePreviews
+@Composable
+private fun MainArrowPreview() = Main(uwbRanging)
+
+@PhonePreviews
+@Composable
+private fun MainArrowImperialPreview() = Main(uwbRanging.copy(metric = false))
+
+@PhonePreviews
+@Composable
+private fun MainClosePreview() = Main(uwbRanging.copy(distanceM = 0.9f, rangeM = 0.9f))
+
+@PhonePreviews
+@Composable
+private fun MainBluetoothOnlyPreview() = Main(
+    FinderState(
+        phase = Phase.Ranging,
+        rangeM = 9f,
+        rangeSource = RangeSource.Bluetooth,
+        rssiDbm = -71,
+        signalDistanceM = 9f,
+        trend = Trend.Closer,
+        message = "Ultra-wideband is not available",
+    ),
+)
+
+@PhonePreviews
+@Composable
+private fun MainMapPreview() = Main(uwbRanging, showMap = true)
+
+@PhonePreviews
+@Composable
+private fun MainDebugPreview() = Main(
+    uwbRanging.copy(
+        debug = true,
+        frameInfo = "North from compass, good to 10\u00b0",
+        rawReading = "az 12.0\u00b0 el -3.0\u00b0 d 4.20 m",
+        log = listOf("Linked as joiner", "UWB session started", "First reading"),
+    ),
+)
