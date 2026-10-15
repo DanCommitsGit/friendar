@@ -28,6 +28,10 @@ Units are Auto, Metric or Imperial. Auto uses feet in the US, Liberia and Myanma
 
 With Keep searching in the background on, a foreground service holds the search while another app is in front. With it off there is no service and the search ends when the app leaves the foreground.
 
+## Theme follows the system until chosen
+
+Theme is System, Light or Dark and defaults to System. Both schemes are fixed palettes, not wallpaper-derived dynamic color, because blue, green and amber mean something on the arrow and the map.
+
 ## Technical readings sit behind the debug switch
 
 Measurement sources, raw readings and the log appear only when Debug info is on in settings. The map caption is shown only when the position is less trustworthy than usual.

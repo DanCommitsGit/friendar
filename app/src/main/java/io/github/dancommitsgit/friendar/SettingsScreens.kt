@@ -14,6 +14,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -247,6 +248,7 @@ internal fun SettingsScreen(
     onBack: () -> Unit,
     onFlip: (FlipMode) -> Unit,
     onUnits: (UnitMode) -> Unit,
+    onTheme: (ThemeMode) -> Unit,
     onBackground: (Boolean) -> Unit,
     onDebug: (Boolean) -> Unit,
     onOpenPhone: () -> Unit,
@@ -302,6 +304,21 @@ internal fun SettingsScreen(
             ),
             selected = state.unitMode,
             onSelect = onUnits,
+        )
+        Choice(
+            title = stringResource(R.string.setting_theme),
+            detail = if (state.themeMode == ThemeMode.System) {
+                stringResource(if (isSystemInDarkTheme()) R.string.theme_auto_dark else R.string.theme_auto_light)
+            } else {
+                null
+            },
+            options = listOf(
+                stringResource(R.string.theme_system) to ThemeMode.System,
+                stringResource(R.string.theme_light) to ThemeMode.Light,
+                stringResource(R.string.theme_dark) to ThemeMode.Dark,
+            ),
+            selected = state.themeMode,
+            onSelect = onTheme,
         )
         Item(
             title = stringResource(R.string.this_phone),

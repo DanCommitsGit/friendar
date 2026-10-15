@@ -18,6 +18,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,7 +41,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -83,43 +83,31 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlinx.coroutines.launch
 
-internal val Blue = Color(0xFF6FA2FF)
-internal val Green = Color(0xFF4ADE80)
-internal val Amber = Color(0xFFFFB74D)
-internal val Ink = Color(0xFF0E1116)
-internal val OnInk = Color(0xFFF1F4F8)
-internal val Muted = Color(0xFFB4BDC9)
-internal val Raised = Color(0xFF232A35)
-
-private val AppColors = darkColorScheme(
-    primary = Blue,
-    onPrimary = Ink,
-    background = Ink,
-    onBackground = OnInk,
-    surface = Ink,
-    onSurface = OnInk,
-    secondaryContainer = Raised,
-    onSecondaryContainer = OnInk,
-    outline = Muted,
-)
-
 class MainActivity : ComponentActivity() {
     private val viewModel: FinderViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
-        )
         setContent {
-            MaterialTheme(colorScheme = AppColors) {
+            val state by viewModel.state.collectAsStateWithLifecycle()
+            val dark = when (state.themeMode) {
+                ThemeMode.System -> isSystemInDarkTheme()
+                ThemeMode.Light -> false
+                ThemeMode.Dark -> true
+            }
+            DisposableEffect(dark) {
+                enableEdgeToEdge(
+                    statusBarStyle = SystemBarStyle.auto(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT) { dark },
+                    navigationBarStyle = SystemBarStyle.auto(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT) { dark },
+                )
+                onDispose {}
+            }
+            FriendarTheme(dark) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                     contentColor = MaterialTheme.colorScheme.onBackground,
                 ) {
-                    val state by viewModel.state.collectAsStateWithLifecycle()
                     var page by rememberSaveable { mutableStateOf(Page.Main) }
                     BackHandler(enabled = page != Page.Main) {
                         page = if (page == Page.Settings) Page.Main else Page.Settings
@@ -144,6 +132,7 @@ class MainActivity : ComponentActivity() {
                             onBack = { page = Page.Main },
                             onFlip = viewModel::setFlipMode,
                             onUnits = viewModel::setUnitMode,
+                            onTheme = viewModel::setThemeMode,
                             onBackground = viewModel::setBackground,
                             onDebug = viewModel::setDebug,
                             onOpenPhone = { page = Page.Phone },
@@ -509,6 +498,10 @@ private fun MapView(state: FinderState, modifier: Modifier = Modifier) {
     val friend = state.friend
     val northLabel = stringResource(R.string.map_north)
     val emptyLabel = stringResource(R.string.map_no_position)
+    val muted = Muted
+    val blue = Blue
+    val green = Green
+    val amber = Amber
     Canvas(modifier = modifier) {
         val cx = size.width / 2
         val cy = size.height / 2
@@ -537,11 +530,11 @@ private fun MapView(state: FinderState, modifier: Modifier = Modifier) {
 
         val text = android.graphics.Paint().apply {
             isAntiAlias = true
-            color = Muted.toArgb()
+            color = muted.toArgb()
             textSize = 12.sp.toPx()
             textAlign = android.graphics.Paint.Align.CENTER
         }
-        val ring = Muted.copy(alpha = 0.35f)
+        val ring = muted.copy(alpha = 0.35f)
         drawCircle(ring, radius = half, center = center, style = Stroke(1.dp.toPx()))
         drawCircle(ring, radius = half / 2, center = center, style = Stroke(1.dp.toPx()))
         drawContext.canvas.nativeCanvas.apply {
@@ -554,9 +547,9 @@ private fun MapView(state: FinderState, modifier: Modifier = Modifier) {
         val range = state.rangeM
         val close = isClose(state.distanceM)
         val tone = when {
-            close -> Green
-            state.rangeSource == RangeSource.Uwb -> Blue
-            else -> Amber
+            close -> green
+            state.rangeSource == RangeSource.Uwb -> blue
+            else -> amber
         }
         if (range != null) {
             drawCircle(
@@ -587,10 +580,10 @@ private fun MapView(state: FinderState, modifier: Modifier = Modifier) {
                     lineTo(cx + wing, cy)
                     close()
                 },
-                Blue.copy(alpha = 0.5f),
+                blue.copy(alpha = 0.5f),
             )
         }
-        drawCircle(Blue, radius = 8.dp.toPx(), center = center)
+        drawCircle(blue, radius = 8.dp.toPx(), center = center)
         drawCircle(Color.White, radius = 3.dp.toPx(), center = center)
         if (friend == null && range == null) {
             drawContext.canvas.nativeCanvas.drawText(emptyLabel, cx, cy + 40.dp.toPx(), text)

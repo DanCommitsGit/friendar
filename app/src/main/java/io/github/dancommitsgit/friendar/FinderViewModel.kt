@@ -44,6 +44,8 @@ enum class FlipMode { Yes, No, Auto }
 
 enum class UnitMode { Auto, Metric, Imperial }
 
+enum class ThemeMode { System, Light, Dark }
+
 data class FinderState(
     /** Which side of the Bluetooth link this phone ended up on; null until linked. */
     val role: Role? = null,
@@ -92,6 +94,7 @@ data class FinderState(
     val unitMode: UnitMode = UnitMode.Auto,
     /** Show distances in meters instead of feet. */
     val metric: Boolean = true,
+    val themeMode: ThemeMode = ThemeMode.System,
     /** Keep searching while the app is not in front. */
     val background: Boolean = true,
     /** Show measurement sources and raw readings. */
@@ -230,6 +233,11 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
     /** Sets the unit explicitly, as when the distance readout is tapped. */
     fun setMetric(value: Boolean) = setUnitMode(if (value) UnitMode.Metric else UnitMode.Imperial)
 
+    fun setThemeMode(mode: ThemeMode) {
+        prefs.edit().putString(PREF_THEME, mode.name).apply()
+        _state.update { it.copy(themeMode = mode) }
+    }
+
     fun setBackground(value: Boolean) {
         prefs.edit().putBoolean(PREF_BACKGROUND, value).apply()
         _state.update { it.copy(background = value) }
@@ -259,6 +267,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
             mirror = mirrorFor(flipMode, learned),
             unitMode = unitMode,
             metric = metricFor(unitMode),
+            themeMode = enumPref(PREF_THEME, ThemeMode.System),
             background = prefs.getBoolean(PREF_BACKGROUND, true),
             debug = prefs.getBoolean(PREF_DEBUG, false),
         )
@@ -1081,6 +1090,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         const val PREF_FLIP = "flip"
         const val PREF_FLIP_LEARNED = "flip_learned"
         const val PREF_UNITS = "units"
+        const val PREF_THEME = "theme"
         const val PREF_BACKGROUND = "background"
         const val PREF_DEBUG = "debug"
         const val FLIP_READING_MAX_AGE_MS = 1_500L
