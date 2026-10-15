@@ -103,7 +103,7 @@ internal val MaterialTheme.success: Color
 /** Unselected toggle buttons stand out from both the page and the cards. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-internal fun connectedToggleColors() = ToggleButtonDefaults.toggleButtonColors(
+internal fun connectedToggleColors() = ToggleButtonDefaults.colors(
     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
 )
 

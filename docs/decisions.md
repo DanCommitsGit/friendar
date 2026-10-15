@@ -40,9 +40,9 @@ Find and Stop are the same button at the bottom, and the middle swaps between th
 
 There is no navigation library. `PageHost` animates pushes and pops and follows the system back gesture with a seekable transition, which needs `enableOnBackInvokedCallback` in the manifest. The gesture only drags the page part of the way, since system progress saturates after about a third of the screen width.
 
-## Material 3 is pinned to 1.5.0-alpha18
+## Material 3 is pinned to 1.5.0-beta01
 
-Connected button groups, the loading indicator, flexible app bars and segmented list items are not in 1.4.0, which is what the Compose BOM maps to. 1.5.0-alpha19 and later need compileSdk 37, and 1.5.0-beta01 needs Android Gradle plugin 9.1, so alpha18 is the newest that builds on AGP 8.13. Move to the stable 1.5.0 when the toolchain is upgraded.
+Connected button groups, the loading indicator, flexible app bars and segmented list items are not in 1.4.0, which is what the Compose BOM maps to, so material3 is pinned on its own. Every 1.5.0 build from alpha19 on needs compileSdk 37 and Android Gradle plugin 9.1 or later, which is why the project is on AGP 9.3 and Gradle 9.5. AGP 9 compiles Kotlin itself, so only the Compose compiler plugin is applied. Move to the stable 1.5.0 when it is released.
 
 ## Technical readings sit behind the debug switch
 

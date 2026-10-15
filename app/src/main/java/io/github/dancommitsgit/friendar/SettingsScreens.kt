@@ -295,7 +295,6 @@ private fun StaticRow(
 ) {
     Surface(shape = shapes.shape, color = rowColors().containerColor) {
         ListItem(
-            headlineContent = { Text(title) },
             supportingContent = if (detail != null) {
                 { Text(detail, color = detailColor) }
             } else {
@@ -303,7 +302,7 @@ private fun StaticRow(
             },
             trailingContent = trailing,
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        )
+        ) { Text(title) }
     }
 }
 

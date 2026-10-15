@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
@@ -19,8 +18,7 @@ val releaseVersionCode: Int? = releaseVersion?.let { version ->
 
 android {
     namespace = "io.github.dancommitsgit.friendar"
-    compileSdk = 36
-    buildToolsVersion = "35.0.0"
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "io.github.dancommitsgit.friendar"
@@ -59,18 +57,12 @@ android {
     }
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
-}
-
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2026.06.01"))
+    implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.compose.ui:ui")
-    // The BOM maps material3 to 1.4.0, which lacks the Expressive components. 1.5.0-alpha19
-    // and later need compileSdk 37, and 1.5.0-beta01 needs Android Gradle plugin 9.1.
-    implementation("androidx.compose.material3:material3:1.5.0-alpha18")
+    // The BOM maps material3 to 1.4.0, which lacks the Expressive components. 1.5.0-beta01
+    // needs compileSdk 37 and Android Gradle plugin 9.1 or later.
+    implementation("androidx.compose.material3:material3:1.5.0-beta01")
     implementation("androidx.activity:activity-compose:1.12.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
