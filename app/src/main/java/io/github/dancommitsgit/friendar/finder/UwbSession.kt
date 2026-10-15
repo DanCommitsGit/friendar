@@ -43,18 +43,14 @@ internal class UwbSession(
     private var attemptJob: Job? = null
     private var roleResendJob: Job? = null
     private var pendingScope: UwbClientSessionScope? = null
-    private var roleAppliedFor = -1
-    private var attempt = 0
-    private var failedAttempts = 0
-    private var iAmController = false
-    private var rangingStarted = false
+    private val attempts = AttemptTracker()
+
+    private val attempt: Int get() = attempts.attempt
+    private val rangingStarted: Boolean get() = attempts.rangingStarted
 
     /** When the latest UWB position arrived, on the elapsed-realtime clock. */
     var lastPositionMs = 0L
         private set
-
-    /** Which side was UWB controller when ranging last worked; the host keeps using it. */
-    private var workingControllerIsHost: Boolean? = null
 
     private val uwbManager: UwbManager? by lazy {
         if (!context.packageManager.hasSystemFeature(PackageManager.FEATURE_UWB)) {
@@ -74,31 +70,25 @@ internal class UwbSession(
         attemptJob = null
         roleResendJob?.cancel()
         roleResendJob = null
-        roleAppliedFor = -1
         pendingScope = null
-        rangingStarted = false
-        attempt = 0
-        failedAttempts = 0
-        workingControllerIsHost = null
+        attempts.reset()
     }
 
     fun onRole(message: Message.Role) {
-        if (message.attempt == roleAppliedFor) return
-        roleAppliedFor = message.attempt
-        attempt = message.attempt
-        applyRole(controller = !message.controllerIsHost)
+        val controller = attempts.adoptRole(message.attempt, message.controllerIsHost) ?: return
+        applyRole(controller)
     }
 
     suspend fun onJoin(message: Message.Join) {
-        if (iAmController && message.attempt == attempt) startAsController(message)
+        if (attempts.acceptsJoin(message.attempt)) startAsController(message)
     }
 
     fun onStart(message: Message.Start) {
-        if (!iAmController && message.attempt == attempt) startAsControlee(message)
+        if (attempts.acceptsStart(message.attempt)) startAsControlee(message)
     }
 
     fun onRetry(message: Message.Retry) {
-        if (message.attempt == attempt) onAttemptFailed("peer asked to retry")
+        if (attempts.isCurrent(message.attempt)) onAttemptFailed("peer asked to retry")
     }
 
     /** Restarts ranging when the measurements have stopped, and drops values that have gone stale. */
@@ -106,19 +96,17 @@ internal class UwbSession(
         val s = state.value
         if (s.phase != Phase.Ranging || !rangingStarted) return
         val silentMs = SystemClock.elapsedRealtime() - lastPositionMs
-        if (silentMs > UWB_STALE_MS && s.distanceM != null) {
-            state.update { it.copy(distanceM = null, directionLive = false) }
-        }
-        if (silentMs > UWB_FORGET_DIRECTION_MS) forgetDirection()
-        if (s.role == Role.Host && silentMs > UWB_RESTART_MS) {
+        val actions = staleActions(silentMs, hasDistance = s.distanceM != null, isHost = s.role == Role.Host)
+        if (actions.dropDistance) state.update { it.copy(distanceM = null, directionLive = false) }
+        if (actions.forgetDirection) forgetDirection()
+        if (actions.restart) {
             log("UWB: no measurements for ${silentMs / 1000}s, restarting")
             startAttempt(attempt + 1)
         }
     }
 
     fun startAttempt(n: Int) {
-        attempt = n and 0xFF
-        val controllerIsHost = workingControllerIsHost ?: (attempt % 2 == 0)
+        val controllerIsHost = attempts.begin(n)
         sendRole(attempt, controllerIsHost)
         val previous = attemptJob
         attemptJob = viewScope.launch {
@@ -134,7 +122,7 @@ internal class UwbSession(
         roleResendJob?.cancel()
         roleResendJob = viewScope.launch {
             repeat(ROLE_SENDS) {
-                if (rangingStarted || attempt != forAttempt) return@launch
+                if (!attempts.roleResendDue(forAttempt)) return@launch
                 send(Message.Role(forAttempt, controllerIsHost))
                 delay(ROLE_RESEND_MS)
             }
@@ -150,28 +138,34 @@ internal class UwbSession(
     }
 
     private fun onAttemptFailed(reason: String) {
-        if (rangingStarted) return
-        if (state.value.role == Role.Joiner) {
-            log("UWB: attempt ${attempt + 1} failed ($reason), asking host to retry")
-            send(Message.Retry(attempt))
-            return
-        }
-        log("UWB: attempt ${attempt + 1} failed ($reason)")
-        failedAttempts++
-        if (failedAttempts >= QUIET_AFTER_ATTEMPTS) {
-            state.update {
-                it.copy(uwbActive = false, message = string(R.string.uwb_not_starting))
+        when (attempts.failed(asJoiner = state.value.role == Role.Joiner)) {
+            FailureAction.Ignore -> Unit
+
+            FailureAction.AskHostToRetry -> {
+                log("UWB: attempt ${attempt + 1} failed ($reason), asking host to retry")
+                send(Message.Retry(attempt))
+            }
+
+            FailureAction.TryNext -> {
+                log("UWB: attempt ${attempt + 1} failed ($reason)")
+                scheduleAttempt(attempt + 1)
+            }
+
+            FailureAction.TryNextAndWarn -> {
+                log("UWB: attempt ${attempt + 1} failed ($reason)")
+                state.update {
+                    it.copy(uwbActive = false, message = string(R.string.uwb_not_starting))
+                }
+                scheduleAttempt(attempt + 1)
             }
         }
-        scheduleAttempt(attempt + 1)
     }
 
     private fun applyRole(controller: Boolean) {
         rangingJob?.cancel()
         pendingScope = null
-        rangingStarted = false
         resetFilters()
-        iAmController = controller
+        attempts.applyRole(controller)
         log("UWB: attempt ${attempt + 1}, this phone is the ${if (controller) "controller" else "controlee"}")
         val thisAttempt = attempt
         viewScope.launch {
@@ -184,7 +178,7 @@ internal class UwbSession(
                 }
                 if (!controller) {
                     val scope = uwbManager!!.controleeSessionScope()
-                    if (thisAttempt != attempt) return@launch
+                    if (!attempts.isCurrent(thisAttempt)) return@launch
                     pendingScope = scope
                     logCapabilities(scope)
                     send(Message.Join(thisAttempt, scope.localAddress.address))
@@ -222,7 +216,7 @@ internal class UwbSession(
     private suspend fun startAsController(join: Message.Join) {
         try {
             val scope = uwbManager!!.controllerSessionScope()
-            if (join.attempt != attempt) return
+            if (!attempts.isCurrent(join.attempt)) return
             logCapabilities(scope)
             val channel = scope.uwbComplexChannel
             log("UWB: channel ${channel.channel}, preamble ${channel.preambleIndex}")
@@ -310,11 +304,8 @@ internal class UwbSession(
 
     private fun handlePosition(position: RangingPosition) {
         lastPositionMs = SystemClock.elapsedRealtime()
-        if (!rangingStarted) {
-            rangingStarted = true
-            failedAttempts = 0
+        if (attempts.measured(asHost = state.value.role == Role.Host)) {
             attemptJob?.cancel()
-            workingControllerIsHost = if (state.value.role == Role.Host) iAmController else !iAmController
             log("UWB: ranging")
         }
         onPosition(position)
@@ -346,9 +337,5 @@ internal class UwbSession(
         const val ROLE_RESEND_MS = 1_500L
         const val ATTEMPT_TIMEOUT_MS = 12_000L
         const val RETRY_DELAY_MS = 2_000L
-        const val QUIET_AFTER_ATTEMPTS = 2
-        const val UWB_STALE_MS = 3_000L
-        const val UWB_FORGET_DIRECTION_MS = 30_000L
-        const val UWB_RESTART_MS = 20_000L
     }
 }
