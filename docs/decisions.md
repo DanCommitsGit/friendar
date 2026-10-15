@@ -58,4 +58,8 @@ The code is built around one peer. Supporting a group needs a group identifier i
 
 ## Distribution is GitHub only
 
-Releases are APKs on the GitHub Releases page, signed with the debug key. APKs are gitignored and nothing is published to the Play Store.
+Releases are APKs on the GitHub Releases page, built and published by the Release workflow, which is started by hand. APKs are gitignored and nothing is published to the Play Store.
+
+The workflow signs with a release key held in repository secrets, because a runner generates a new debug key every run and Android refuses to update an install signed with a different key. Local builds still use the debug key. Losing the release key means existing installs can only be reinstalled, not updated.
+
+semantic-release picks the version from conventional commit messages and writes the release notes, with the build running inside its prepare step so the tag, notes and APK come from one run. It creates no commit and no changelog file, so the release notes live only on the GitHub release. The version name and code come from the version it picks, so `1.2.3` becomes code 10203 and the minor and patch parts must stay under 100.

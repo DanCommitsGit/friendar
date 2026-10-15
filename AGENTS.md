@@ -10,7 +10,11 @@ Android app (Kotlin, Compose) that points two nearby phones at each other using 
 ./gradlew assembleRelease
 ```
 
-The release build is signed with the debug key. Tests cover only the pure-math files; Bluetooth, UWB, Wi-Fi Aware and sensor code can only be checked on two real phones.
+Local release builds are signed with the debug key. Tests cover only the pure-math files; Bluetooth, UWB, Wi-Fi Aware and sensor code can only be checked on two real phones.
+
+## Releasing
+
+Run the Release workflow from the Actions tab on `main`. semantic-release reads the conventional commits since the last tag, picks the next version (`fix` is a patch, `feat` a minor, `!` or a `BREAKING CHANGE` footer a major), then the workflow tests, builds, signs with the key in the repository secrets and publishes the APK with generated notes to GitHub Releases. Tick `dry_run` to see the next version and notes without releasing. Commit types other than `feat`, `fix` and `perf` do not trigger a release.
 
 ## Docs
 
