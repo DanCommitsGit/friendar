@@ -1,0 +1,13 @@
+{
+  "name": "friendar",
+  "private": true,
+  "description": "Release tooling for Friendar. The app itself is built with Gradle.",
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "devDependencies": {
+    "@semantic-release/exec": "7.1.0",
+    "conventional-changelog-conventionalcommits": "10.4.0",
+    "semantic-release": "25.0.9"
+  }
+}

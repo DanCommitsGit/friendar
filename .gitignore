@@ -13,6 +13,10 @@ local.properties
 # Built APKs go on the GitHub Releases page, not in the repo
 *.apk
 *.aab
+release-assets/
+
+# Release tooling dependencies
+node_modules/
 
 # Signing keys
 *.jks
