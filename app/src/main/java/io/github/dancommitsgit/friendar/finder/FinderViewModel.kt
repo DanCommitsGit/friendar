@@ -19,24 +19,17 @@ import androidx.core.uwb.UwbDevice
 import androidx.core.uwb.UwbManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import io.github.dancommitsgit.friendar.fusion.AngleSmoother
-import io.github.dancommitsgit.friendar.fusion.Bearing
-import io.github.dancommitsgit.friendar.fusion.BearingFusion
-import io.github.dancommitsgit.friendar.fusion.bearingOf
-import io.github.dancommitsgit.friendar.fusion.DirectionFilter
-import io.github.dancommitsgit.friendar.fusion.DirectionSource
+import io.github.dancommitsgit.friendar.LocatorService
+import io.github.dancommitsgit.friendar.R
 import io.github.dancommitsgit.friendar.fusion.DistanceFilter
 import io.github.dancommitsgit.friendar.fusion.Fix
-import io.github.dancommitsgit.friendar.fusion.FlipDetector
-import io.github.dancommitsgit.friendar.fusion.FrameCalibrator
-import io.github.dancommitsgit.friendar.fusion.FriendEstimate
-import io.github.dancommitsgit.friendar.fusion.Fusion
-import io.github.dancommitsgit.friendar.fusion.Geo
-import io.github.dancommitsgit.friendar.fusion.Geometry
+import io.github.dancommitsgit.friendar.fusion.FriendTracker
+import io.github.dancommitsgit.friendar.fusion.NorthReference
+import io.github.dancommitsgit.friendar.fusion.Range
 import io.github.dancommitsgit.friendar.fusion.RangeTrend
 import io.github.dancommitsgit.friendar.fusion.SignalTracker
 import io.github.dancommitsgit.friendar.fusion.Trend
-import io.github.dancommitsgit.friendar.fusion.wrapPositive
+import io.github.dancommitsgit.friendar.fusion.bestRange
 import io.github.dancommitsgit.friendar.link.AwareLink
 import io.github.dancommitsgit.friendar.link.AwareListener
 import io.github.dancommitsgit.friendar.link.BleHost
@@ -44,93 +37,20 @@ import io.github.dancommitsgit.friendar.link.BleJoiner
 import io.github.dancommitsgit.friendar.link.LinkListener
 import io.github.dancommitsgit.friendar.link.Message
 import io.github.dancommitsgit.friendar.link.Protocol
-import io.github.dancommitsgit.friendar.LocatorService
-import io.github.dancommitsgit.friendar.R
 import io.github.dancommitsgit.friendar.sensors.LocationTracker
 import io.github.dancommitsgit.friendar.sensors.Orientation
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.abs
-import kotlin.math.atan2
-import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.random.Random
-
-enum class Role { Host, Joiner }
-
-enum class Phase { Idle, Waiting, Ranging, Failed }
-
-enum class RangeSource { Uwb, Wifi, Bluetooth }
-
-enum class FlipMode { Yes, No, Auto }
-
-enum class UnitMode { Auto, Metric, Imperial }
-
-enum class ThemeMode { System, Light, Dark }
-
-data class FinderState(
-    /** Which side of the Bluetooth link this phone ended up on; null until linked. */
-    val role: Role? = null,
-    val phase: Phase = Phase.Idle,
-    /** Precise UWB distance; null while UWB has no current measurement. */
-    val distanceM: Float? = null,
-    /** Degrees clockwise from the top of the screen, null until a direction is known. */
-    val arrowDeg: Float? = null,
-    /** Friend's height relative to the horizon, in degrees. */
-    val elevationDeg: Float? = null,
-    /** True while recent UWB readings are good enough to trust the direction. */
-    val directionLive: Boolean = false,
-    /** True when the phone is held flat and the arrow works like a compass needle. */
-    val flat: Boolean = false,
-    /** Smoothed Bluetooth signal strength. */
-    val rssiDbm: Int? = null,
-    /** Rough distance from Bluetooth signal strength; works through walls. */
-    val signalDistanceM: Float? = null,
-    /** Wi-Fi round-trip-time distance; works through walls, good to a few meters. */
-    val awareDistanceM: Float? = null,
-    val trend: Trend? = null,
-    /** Best available distance, with where it came from; null when nothing is measured. */
-    val rangeM: Float? = null,
-    val rangeSource: RangeSource? = null,
-    val myAccuracyM: Float? = null,
-    /** True while the friend's shared GPS position is recent. */
-    val friendGps: Boolean = false,
-    /** Friend's estimated position in meters east and north of this phone. */
-    val friend: FriendEstimate? = null,
-    /** Direction this phone faces, degrees clockwise from true north; null without a compass reference. */
-    val headingDeg: Float? = null,
-    /** Which measurements the arrow direction comes from. */
-    val arrowSource: DirectionSource? = null,
-    /** How north was found and how far to trust it, for the details screen. */
-    val frameInfo: String? = null,
-    val uwbActive: Boolean = false,
-    /** Why a failure or fallback happened. */
-    val message: String? = null,
-    /** Suggestion shown when a step is taking unusually long. */
-    val hint: String? = null,
-    val flipMode: FlipMode = FlipMode.Auto,
-    /** What Auto resolves to: true when negating the UWB azimuth fits GPS and compass; null until learned. */
-    val flipAuto: Boolean? = null,
-    /** Whether the UWB azimuth is negated right now, however that was decided. */
-    val mirror: Boolean = true,
-    val unitMode: UnitMode = UnitMode.Auto,
-    /** Show distances in meters instead of feet. */
-    val metric: Boolean = true,
-    val themeMode: ThemeMode = ThemeMode.System,
-    /** Keep searching while the app is not in front. */
-    val background: Boolean = true,
-    /** Show measurement sources and raw readings. */
-    val debug: Boolean = false,
-    val rawReading: String? = null,
-    val log: List<String> = emptyList(),
-)
 
 class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, AwareListener {
     private val prefs = app.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -138,8 +58,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
     val state: StateFlow<FinderState> = _state.asStateFlow()
 
     private val distanceFilter = DistanceFilter()
-    private val directionFilter = DirectionFilter()
-    private val arrowSmoother = AngleSmoother()
+    private val tracker = FriendTracker()
     private val signal = SignalTracker()
 
     @Volatile
@@ -151,28 +70,8 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
     }
 
     private val awareTrend = RangeTrend()
-    private val frameCalibrator = FrameCalibrator()
-    private val flipDetector = FlipDetector()
-
-    private class Reading(val azimuthDeg: Float, val elevationDeg: Float, val rotation: FloatArray, val timeMs: Long)
-
-    /** Latest UWB angle with the phone attitude it was taken at, as reported before any flip. */
-    @Volatile
-    private var lastReading: Reading? = null
-
-    /** Bearing to the friend from GPS, in the gyroscope frame; refreshed once a second. */
-    @Volatile
-    private var gpsBearing: Bearing? = null
-
-    /** Yaw of the gyroscope frame from true north, from the compass and from UWB-versus-GPS calibration. */
-    @Volatile
-    private var frame: Bearing? = null
-    private var lastGoodDirectionMs = 0L
     private var aware: AwareLink? = null
     private var locations: LocationTracker? = null
-    private var myFix: Fix? = null
-    private var friendFix: Fix? = null
-    private var declinationDeg = 0f
     private var lastAwareMs = 0L
     private var awareStdM = 0f
     private var lastShareMs = 0L
@@ -215,8 +114,6 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         failedAttempts = 0
         rangingStarted = false
         workingControllerIsHost = null
-        flipDetector.reset()
-        lastReading = null
         _state.value = freshState(Phase.Waiting)
         log("${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}")
         val pm = getApplication<Application>().packageManager
@@ -250,7 +147,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
     fun setFlipMode(mode: FlipMode) {
         prefs.edit().putString(PREF_FLIP, mode.name).apply()
         val mirror = mirrorFor(mode, _state.value.flipAuto)
-        if (mirror != _state.value.mirror) onMirrorChanged()
+        if (mirror != _state.value.mirror) tracker.onMirrorChanged()
         _state.update { it.copy(flipMode = mode, mirror = mirror) }
     }
 
@@ -318,13 +215,6 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         UnitMode.Auto -> Locale.getDefault().country !in IMPERIAL_COUNTRIES
     }
 
-    /** Readings and calibration made with the other sign no longer describe the friend's direction. */
-    private fun onMirrorChanged() {
-        directionFilter.reset()
-        arrowSmoother.reset()
-        frameCalibrator.reset()
-    }
-
     private fun string(id: Int) = getApplication<Application>().getString(id)
 
     fun stop() {
@@ -338,14 +228,9 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         aware = null
         locations?.stop()
         locations = null
-        myFix = null
-        friendFix = null
+        tracker.clear()
         awareTrend.reset()
-        frameCalibrator.reset()
-        gpsBearing = null
-        frame = null
         lastAwareMs = 0L
-        lastReading = null
         stopService()
         _state.value = freshState()
     }
@@ -429,8 +314,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
 
     private fun resetFilters() {
         distanceFilter.reset()
-        directionFilter.reset()
-        arrowSmoother.reset()
+        tracker.forgetDirection()
     }
 
     private fun send(message: Message) {
@@ -525,26 +409,28 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
     override fun onAwareLog(text: String) = log(text)
 
     private fun onFriendLocation(message: Message.Location) {
-        friendFix = Fix(
-            lat = message.latE7 / 1e7,
-            lon = message.lonE7 / 1e7,
-            accuracyM = message.accuracyM.toFloat(),
-            timeMs = SystemClock.elapsedRealtime(),
+        tracker.onFriendFix(
+            Fix(
+                lat = message.latE7 / 1e7,
+                lon = message.lonE7 / 1e7,
+                accuracyM = message.accuracyM.toFloat(),
+                timeMs = SystemClock.elapsedRealtime(),
+            ),
         )
         updateMap()
     }
 
     private fun onFix(fix: Fix) {
-        myFix = fix
-        declinationDeg = GeomagneticField(
+        val declinationDeg = GeomagneticField(
             fix.lat.toFloat(), fix.lon.toFloat(), 0f, System.currentTimeMillis(),
         ).declination
+        tracker.onMyFix(fix, declinationDeg)
         _state.update { it.copy(myAccuracyM = fix.accuracyM) }
         updateMap()
     }
 
     private fun shareLocation(now: Long) {
-        val fix = myFix ?: return
+        val fix = tracker.myFix ?: return
         if (now - lastShareMs < SHARE_INTERVAL_MS) return
         lastShareMs = now
         val message = Message.Location(
@@ -559,194 +445,39 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
     private fun currentTrend(now: Long): Trend? =
         if (now - lastAwareMs < AWARE_STALE_MS) awareTrend.trend() ?: signal.trend() else signal.trend()
 
-    private data class Range(val meters: Float, val sigmaM: Float, val source: RangeSource)
-
-    private fun bestRange(now: Long): Range? {
+    private fun currentRange(now: Long): Range? {
         val s = _state.value
-        val awareDistance = s.awareDistanceM?.takeIf { now - lastAwareMs < AWARE_STALE_MS }
-        return when {
-            s.distanceM != null -> Range(s.distanceM, UWB_SIGMA_M, RangeSource.Uwb)
-            awareDistance != null -> Range(awareDistance, maxOf(WIFI_MIN_SIGMA_M, awareStdM), RangeSource.Wifi)
-            s.signalDistanceM != null -> Range(s.signalDistanceM, s.signalDistanceM * 0.5f, RangeSource.Bluetooth)
-            else -> null
-        }
+        val wifi = s.awareDistanceM?.takeIf { now - lastAwareMs < AWARE_STALE_MS }
+        return bestRange(s.distanceM, wifi, awareStdM, s.signalDistanceM)
     }
 
-    /**
-     * Where the gyroscope frame points relative to true north, blending the compass with
-     * UWB-versus-GPS calibration.
-     */
-    private fun frameOffset(): Bearing? {
-        val magnetic = orientation.northOffsetRad?.let {
-            val deg = Math.toDegrees(it.toDouble()).toFloat() - declinationDeg
-            Bearing(wrapPositive(deg), if (orientation.northReliable) COMPASS_SIGMA_DEG else COMPASS_POOR_SIGMA_DEG)
-        }
-        return BearingFusion.combine(listOfNotNull(magnetic, frameCalibrator.estimate()))
-    }
+    private fun northReference(): NorthReference? =
+        orientation.northOffsetRad?.let { NorthReference(it, orientation.northReliable) }
 
-    private fun freshFixes(now: Long): Pair<Fix, Fix>? {
-        val me = myFix?.takeIf { now - it.timeMs < FIX_MAX_AGE_MS } ?: return null
-        val friend = friendFix?.takeIf { now - it.timeMs < FIX_MAX_AGE_MS } ?: return null
-        return me to friend
-    }
-
-    /** Learns the frame's yaw from moments when UWB has a clear line and both GPS fixes are good. */
-    private fun calibrate(now: Long) {
-        val (me, friend) = freshFixes(now) ?: return
-        val direction = directionFilter.direction() ?: return
-        if (now - lastGoodDirectionMs > DIRECTION_LIVE_MS) return
-        val range = _state.value.distanceM ?: return
-        val positionSigma = hypot(me.accuracyM, friend.accuracyM)
-        if (positionSigma > CALIBRATION_MAX_GPS_ERROR_M) return
-        if (range < maxOf(CALIBRATION_MIN_RANGE_M, 3f * positionSigma)) return
-        val offset = Geo.offset(me, friend)
-        val trueBearing = wrapPositive(Math.toDegrees(atan2(offset[0], offset[1]).toDouble()).toFloat())
-        val gpsSigma = Math.toDegrees(atan2(positionSigma, range).toDouble()).toFloat()
-        frameCalibrator.add(
-            wrapPositive(bearingOf(direction) - trueBearing),
-            hypot(gpsSigma, UWB_SIGMA_DEG),
-        )
-    }
-
-    /**
-     * Compares where each azimuth sign would put the friend with the GPS bearing, using the
-     * compass alone for north so that a wrong sign cannot leak into the reference.
-     */
     private fun checkFlip(now: Long) {
-        val reading = lastReading?.takeIf { now - it.timeMs < FLIP_READING_MAX_AGE_MS } ?: return
-        val (me, friend) = freshFixes(now) ?: return
-        val range = _state.value.distanceM ?: return
-        val north = orientation.northOffsetRad?.takeIf { orientation.northReliable } ?: return
-        val positionSigma = hypot(me.accuracyM, friend.accuracyM)
-        if (positionSigma > CALIBRATION_MAX_GPS_ERROR_M) return
-        if (range < maxOf(CALIBRATION_MIN_RANGE_M, 3f * positionSigma)) return
-
-        val reported = Geometry.deviceVector(reading.azimuthDeg, reading.elevationDeg)
-        if (Geometry.weight(Geometry.offBoresightDeg(reported)) < FLIP_MIN_WEIGHT) return
-        val negated = Geometry.deviceVector(-reading.azimuthDeg, reading.elevationDeg)
-
-        val offset = Geo.offset(me, friend)
-        val trueBearing = wrapPositive(Math.toDegrees(atan2(offset[0], offset[1]).toDouble()).toFloat())
-        val frameDeg = wrapPositive(Math.toDegrees(north.toDouble()).toFloat() - declinationDeg)
-        val gpsSigma = Math.toDegrees(atan2(positionSigma, range).toDouble()).toFloat()
-        flipDetector.add(
-            reportedBearing = bearingOf(Geometry.toWorld(reading.rotation, reported)),
-            negatedBearing = bearingOf(Geometry.toWorld(reading.rotation, negated)),
-            referenceBearing = wrapPositive(trueBearing + frameDeg),
-            sigmaDeg = hypot(gpsSigma, COMPASS_SIGMA_DEG),
+        val s = _state.value
+        val verdict = tracker.checkFlip(now, s.distanceM, northReference(), s.flipAuto) ?: return
+        log(
+            "Flip: ${if (verdict.reversed) "azimuth is reversed" else "azimuth is correct"} " +
+                "(score %.1f)".format(Locale.US, verdict.score),
         )
-        val verdict = flipDetector.verdict ?: return
-        if (verdict == _state.value.flipAuto) return
-        log("Flip: ${if (verdict) "azimuth is reversed" else "azimuth is correct"} (score %.1f)".format(Locale.US, flipDetector.score))
-        prefs.edit().putBoolean(PREF_FLIP_LEARNED, verdict).apply()
-        val mirror = mirrorFor(_state.value.flipMode, verdict)
-        if (mirror != _state.value.mirror) onMirrorChanged()
-        _state.update { it.copy(flipAuto = verdict, mirror = mirror) }
-    }
-
-    /** One direction from UWB and GPS, in the gyroscope frame, with the vertical angle from UWB. */
-    private class Fused(val bearing: Bearing, val elevationDeg: Float, val source: DirectionSource) {
-        val world: FloatArray
-            get() {
-                val b = Math.toRadians(bearing.deg.toDouble())
-                val e = Math.toRadians(elevationDeg.toDouble())
-                return floatArrayOf(
-                    (kotlin.math.sin(b) * kotlin.math.cos(e)).toFloat(),
-                    (kotlin.math.cos(b) * kotlin.math.cos(e)).toFloat(),
-                    kotlin.math.sin(e).toFloat(),
-                )
-            }
-    }
-
-    private fun fuseDirection(now: Long): Fused? {
-        val direction = directionFilter.direction()
-        val age = now - lastGoodDirectionMs
-        val uwb = direction?.let {
-            val stale = maxOf(0L, age - DIRECTION_LIVE_MS) / 1000f
-            Bearing(bearingOf(it), minOf(UWB_SIGMA_DEG + stale * UWB_AGING_DEG_PER_S, 90f))
-        }
-        val gps = gpsBearing
-        val combined = BearingFusion.combine(listOfNotNull(uwb, gps)) ?: return null
-        val source = when {
-            uwb != null && gps != null -> {
-                val wUwb = 1f / (uwb.sigmaDeg * uwb.sigmaDeg)
-                val wGps = 1f / (gps.sigmaDeg * gps.sigmaDeg)
-                when {
-                    wUwb >= 4f * wGps -> DirectionSource.Uwb
-                    wGps >= 4f * wUwb -> DirectionSource.Gps
-                    else -> DirectionSource.Both
-                }
-            }
-
-            uwb != null -> DirectionSource.Uwb
-            else -> DirectionSource.Gps
-        }
-        val elevation = if (direction != null && age < ELEVATION_HOLD_MS) {
-            Geometry.worldElevationDeg(direction)
-        } else {
-            0f
-        }
-        return Fused(combined, elevation, source)
+        prefs.edit().putBoolean(PREF_FLIP_LEARNED, verdict.reversed).apply()
+        val mirror = mirrorFor(s.flipMode, verdict.reversed)
+        if (mirror != s.mirror) tracker.onMirrorChanged()
+        _state.update { it.copy(flipAuto = verdict.reversed, mirror = mirror) }
     }
 
     private fun updateMap() {
         val now = SystemClock.elapsedRealtime()
-        val range = bestRange(now)
-        val fixes = freshFixes(now)
-        val frameNow = frameOffset()
-        frame = frameNow
-
-        // GPS bearing to the friend, moved into the gyroscope frame.
-        val gpsDirection = if (fixes != null && frameNow != null) {
-            val (me, friend) = fixes
-            val offset = Geo.offset(me, friend)
-            val length = hypot(offset[0], offset[1])
-            val positionSigma = hypot(me.accuracyM, friend.accuracyM)
-            if (length < MIN_GPS_BASELINE_M) {
-                null
-            } else {
-                val trueBearing = wrapPositive(Math.toDegrees(atan2(offset[0], offset[1]).toDouble()).toFloat())
-                val reference = range?.meters ?: length
-                val sigma = Math.toDegrees(atan2(positionSigma, reference).toDouble()).toFloat()
-                    .coerceIn(MIN_GPS_SIGMA_DEG, MAX_GPS_SIGMA_DEG)
-                Bearing(wrapPositive(trueBearing + frameNow.deg), hypot(sigma, frameNow.sigmaDeg))
-            }
-        } else {
-            null
-        }
-        gpsBearing = gpsDirection
-
-        val fused = fuseDirection(now)
-        val trueBearing = if (fused != null && frameNow != null) {
-            wrapPositive(fused.bearing.deg - frameNow.deg)
-        } else {
-            null
-        }
-        val bearingSigma = fused?.let { hypot(it.bearing.sigmaDeg, frameNow?.sigmaDeg ?: 0f) } ?: 0f
-        val estimate = Fusion.estimate(
-            me = fixes?.first,
-            friend = fixes?.second,
-            rangeM = range?.meters,
-            rangeSigmaM = range?.sigmaM ?: 0f,
-            bearingDeg = trueBearing,
-            bearingSigmaDeg = bearingSigma,
-        )
-        val calibrated = frameCalibrator.estimate()
-        val info = frameNow?.let {
-            val how = when {
-                calibrated != null && orientation.northOffsetRad != null -> "compass + UWB/GPS"
-                calibrated != null -> "UWB/GPS"
-                else -> "compass"
-            }
-            "north: $how, ±%.0f°".format(Locale.US, it.sigmaDeg)
-        }
+        val range = currentRange(now)
+        val position = tracker.estimate(now, range, northReference())
         _state.update {
             it.copy(
                 rangeM = range?.meters,
                 rangeSource = range?.source,
-                friend = estimate,
-                friendGps = fixes != null,
-                frameInfo = info,
+                friend = position.friend,
+                friendGps = position.friendGps,
+                frameInfo = position.frameInfo,
                 trend = currentTrend(now),
             )
         }
@@ -815,7 +546,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         }
         shareLocation(now)
         checkFlip(now)
-        calibrate(now)
+        tracker.calibrate(now, _state.value.distanceM)
         updateMap()
         val s = _state.value
         if (s.phase != Phase.Ranging || !rangingStarted) return
@@ -823,10 +554,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         if (silentMs > UWB_STALE_MS && s.distanceM != null) {
             _state.update { it.copy(distanceM = null, directionLive = false) }
         }
-        if (silentMs > UWB_FORGET_DIRECTION_MS) {
-            directionFilter.reset()
-            arrowSmoother.reset()
-        }
+        if (silentMs > UWB_FORGET_DIRECTION_MS) tracker.forgetDirection()
         if (s.role == Role.Host && silentMs > UWB_RESTART_MS) {
             log("UWB: no measurements for ${silentMs / 1000}s, restarting")
             startAttempt(attempt + 1)
@@ -1055,14 +783,13 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
             position.elevation?.value?.let { "%.0f".format(Locale.US, it) } ?: "-",
         )
         if (azimuth != null && r != null) {
-            lastReading = Reading(azimuth, elevation, r, lastPositionMs)
-            val signed = if (_state.value.mirror) -azimuth else azimuth
-            val local = Geometry.deviceVector(signed, elevation)
-            val off = Geometry.offBoresightDeg(local)
-            val weight = Geometry.weight(off) * distanceTrust
-            val used = directionFilter.add(Geometry.toWorld(r, local), weight)
-            if (used) lastGoodDirectionMs = SystemClock.elapsedRealtime()
-            raw += String.format(Locale.US, " off=%.0f w=%.2f%s", off, weight, if (used) "" else " skip")
+            val result = tracker.addUwbReading(
+                azimuth, elevation, r, _state.value.mirror, distanceTrust, lastPositionMs,
+            )
+            raw += String.format(
+                Locale.US, " off=%.0f w=%.2f%s",
+                result.offBoresightDeg, result.weight, if (result.used) "" else " skip",
+            )
         }
         _state.update {
             it.copy(
@@ -1082,33 +809,18 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         if (now - lastArrowUpdateMs < ARROW_INTERVAL_MS) return
         lastArrowUpdateMs = now
         val r = rotation ?: return
-        val fused = fuseDirection(now)
-        val world = fused?.world
-        val raw = world?.let { Geometry.arrowDegrees(r, it) }
-        val arrow = if (raw != null) {
-            arrowSmoother.add(raw)
-        } else {
-            arrowSmoother.reset()
-            null
-        }
-        val elevation = world?.let { Geometry.worldElevationDeg(it) }
-        val live = directionFilter.confidence() > LIVE_CONFIDENCE &&
-            now - lastGoodDirectionMs < DIRECTION_LIVE_MS
-        val flat = Geometry.isFlat(r)
-        val heading = frame?.let {
-            wrapPositive(Geometry.headingDeg(r, Math.toRadians(it.deg.toDouble()).toFloat()))
-        }
+        val reading = tracker.arrow(now, r)
         _state.update {
             if (it.phase != Phase.Ranging) {
                 it
             } else {
                 it.copy(
-                    arrowDeg = arrow,
-                    elevationDeg = elevation,
-                    directionLive = live,
-                    arrowSource = fused?.source,
-                    headingDeg = heading,
-                    flat = flat,
+                    arrowDeg = reading.arrowDeg,
+                    elevationDeg = reading.elevationDeg,
+                    directionLive = reading.directionLive,
+                    arrowSource = reading.source,
+                    headingDeg = reading.headingDeg,
+                    flat = reading.flat,
                 )
             }
         }
@@ -1122,19 +834,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         const val PREF_THEME = "theme"
         const val PREF_BACKGROUND = "background"
         const val PREF_DEBUG = "debug"
-        const val FLIP_READING_MAX_AGE_MS = 1_500L
-        const val FLIP_MIN_WEIGHT = 0.2f
         val IMPERIAL_COUNTRIES = setOf("US", "LR", "MM")
-        const val UWB_SIGMA_DEG = 12f
-        const val UWB_AGING_DEG_PER_S = 2f
-        const val ELEVATION_HOLD_MS = 10_000L
-        const val COMPASS_SIGMA_DEG = 20f
-        const val COMPASS_POOR_SIGMA_DEG = 40f
-        const val MIN_GPS_BASELINE_M = 0.5f
-        const val MIN_GPS_SIGMA_DEG = 5f
-        const val MAX_GPS_SIGMA_DEG = 120f
-        const val CALIBRATION_MAX_GPS_ERROR_M = 15f
-        const val CALIBRATION_MIN_RANGE_M = 8f
         const val MAX_LOG_LINES = 20
         const val WATCHDOG_START_MS = 12_000L
         const val PEER_SILENT_MS = 8_000L
@@ -1147,15 +847,10 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         const val QUIET_AFTER_ATTEMPTS = 2
         const val SHARE_INTERVAL_MS = 2_000L
         const val AWARE_STALE_MS = 5_000L
-        const val FIX_MAX_AGE_MS = 60_000L
-        const val UWB_SIGMA_M = 0.5f
-        const val WIFI_MIN_SIGMA_M = 2f
         const val UWB_STALE_MS = 3_000L
         const val UWB_FORGET_DIRECTION_MS = 30_000L
         const val UWB_RESTART_MS = 20_000L
-        const val DIRECTION_LIVE_MS = 2_000L
         const val DISTANCE_JITTER_M = 1.5f
         const val ARROW_INTERVAL_MS = 33L
-        const val LIVE_CONFIDENCE = 1.0f
     }
 }

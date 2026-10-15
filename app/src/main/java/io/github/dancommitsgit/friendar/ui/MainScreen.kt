@@ -62,7 +62,7 @@ import androidx.compose.ui.unit.sp
 import io.github.dancommitsgit.friendar.R
 import io.github.dancommitsgit.friendar.finder.FinderState
 import io.github.dancommitsgit.friendar.finder.Phase
-import io.github.dancommitsgit.friendar.finder.RangeSource
+import io.github.dancommitsgit.friendar.fusion.RangeSource
 import io.github.dancommitsgit.friendar.fusion.DirectionSource
 import io.github.dancommitsgit.friendar.fusion.isClose
 
