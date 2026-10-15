@@ -1,14 +1,12 @@
 package io.github.dancommitsgit.friendar
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
-import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -21,6 +19,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -39,7 +38,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
@@ -85,13 +83,13 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlinx.coroutines.launch
 
-private val Blue = Color(0xFF6FA2FF)
-private val Green = Color(0xFF4ADE80)
-private val Amber = Color(0xFFFFB74D)
-private val Ink = Color(0xFF0E1116)
-private val OnInk = Color(0xFFF1F4F8)
-private val Muted = Color(0xFFB4BDC9)
-private val Raised = Color(0xFF232A35)
+internal val Blue = Color(0xFF6FA2FF)
+internal val Green = Color(0xFF4ADE80)
+internal val Amber = Color(0xFFFFB74D)
+internal val Ink = Color(0xFF0E1116)
+internal val OnInk = Color(0xFFF1F4F8)
+internal val Muted = Color(0xFFB4BDC9)
+internal val Raised = Color(0xFF232A35)
 
 private val AppColors = darkColorScheme(
     primary = Blue,
@@ -122,22 +120,51 @@ class MainActivity : ComponentActivity() {
                     contentColor = MaterialTheme.colorScheme.onBackground,
                 ) {
                     val state by viewModel.state.collectAsStateWithLifecycle()
-                    if (state.phase == Phase.Idle) {
-                        HomeScreen(onStart = viewModel::start)
-                    } else {
-                        FinderScreen(
+                    var page by rememberSaveable { mutableStateOf(Page.Main) }
+                    BackHandler(enabled = page != Page.Main) {
+                        page = if (page == Page.Settings) Page.Main else Page.Settings
+                    }
+                    when (page) {
+                        Page.Main -> if (state.phase == Phase.Idle) {
+                            HomeScreen(
+                                onStart = viewModel::start,
+                                onSettings = { page = Page.Settings },
+                            )
+                        } else {
+                            FinderScreen(
+                                state,
+                                onStop = viewModel::stop,
+                                onMetric = viewModel::setMetric,
+                                onSettings = { page = Page.Settings },
+                            )
+                        }
+
+                        Page.Settings -> SettingsScreen(
                             state,
-                            onStop = viewModel::stop,
-                            onMirror = viewModel::setMirror,
-                            onMetric = viewModel::setMetric,
+                            onBack = { page = Page.Main },
+                            onFlip = viewModel::setFlipMode,
+                            onUnits = viewModel::setUnitMode,
+                            onBackground = viewModel::setBackground,
                             onDebug = viewModel::setDebug,
+                            onOpenPhone = { page = Page.Phone },
+                            onOpenPermissions = { page = Page.Permissions },
                         )
+
+                        Page.Phone -> PhoneScreen(onBack = { page = Page.Settings })
+                        Page.Permissions -> PermissionsScreen(onBack = { page = Page.Settings })
                     }
                 }
             }
         }
     }
+
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) viewModel.onAppHidden()
+    }
 }
+
+private enum class Page { Main, Settings, Phone, Permissions }
 
 private val requiredPermissions = arrayOf(
     Manifest.permission.BLUETOOTH_SCAN,
@@ -157,7 +184,7 @@ private val bluetoothPermissions = setOf(
 )
 
 @Composable
-private fun HomeScreen(onStart: () -> Unit) {
+private fun HomeScreen(onStart: () -> Unit, onSettings: () -> Unit) {
     val context = LocalView.current.context
     var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
     var denied by remember { mutableStateOf(false) }
@@ -180,54 +207,43 @@ private fun HomeScreen(onStart: () -> Unit) {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .systemBarsPadding()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            stringResource(R.string.app_name),
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(48.dp))
-        Button(
-            onClick = { withPermissions(onStart) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(64.dp),
-        ) {
-            Text(stringResource(R.string.home_find), fontSize = 20.sp)
+    Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+        TextButton(onClick = onSettings, modifier = Modifier.align(Alignment.TopEnd)) {
+            Text(stringResource(R.string.settings), color = Muted)
         }
-        Spacer(Modifier.height(16.dp))
-        Text(
-            stringResource(R.string.home_hint),
-            color = Muted,
-            textAlign = TextAlign.Center,
-        )
-
-        if (denied) {
-            Spacer(Modifier.height(24.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Text(
-                stringResource(R.string.permission_needed),
-                color = Amber,
+                stringResource(R.string.app_name),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
             )
-            TextButton(
-                onClick = {
-                    context.startActivity(
-                        Intent(
-                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.fromParts("package", context.packageName, null),
-                        ),
-                    )
-                },
+            Spacer(Modifier.height(48.dp))
+            Button(
+                onClick = { withPermissions(onStart) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp),
             ) {
-                Text(stringResource(R.string.open_settings))
+                Text(stringResource(R.string.home_find), fontSize = 20.sp)
+            }
+
+            if (denied) {
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    stringResource(R.string.permission_needed),
+                    color = Amber,
+                    textAlign = TextAlign.Center,
+                )
+                TextButton(onClick = { openAppSettings(context) }) {
+                    Text(stringResource(R.string.open_settings))
+                }
             }
         }
     }
@@ -237,9 +253,8 @@ private fun HomeScreen(onStart: () -> Unit) {
 private fun FinderScreen(
     state: FinderState,
     onStop: () -> Unit,
-    onMirror: (Boolean) -> Unit,
     onMetric: (Boolean) -> Unit,
-    onDebug: (Boolean) -> Unit,
+    onSettings: () -> Unit,
 ) {
     val view = LocalView.current
     DisposableEffect(view) {
@@ -247,7 +262,6 @@ private fun FinderScreen(
         onDispose { view.keepScreenOn = false }
     }
 
-    var showSettings by remember { mutableStateOf(false) }
     val close = isClose(state.distanceM)
     val arrowColor by animateColorAsState(
         when {
@@ -260,7 +274,7 @@ private fun FinderScreen(
     val showArrow = state.phase == Phase.Ranging && state.arrowDeg != null
     val roughDistance = state.distanceM == null && state.rangeSource == RangeSource.Bluetooth
     var showMap by rememberSaveable { mutableStateOf(false) }
-    val graphicSize = if (showSettings) 160.dp else 240.dp
+    val graphicSize = if (state.debug) 160.dp else 240.dp
 
     Column(
         modifier = Modifier
@@ -269,6 +283,11 @@ private fun FinderScreen(
             .padding(horizontal = 24.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onSettings) {
+                Text(stringResource(R.string.settings), color = Muted)
+            }
+        }
         Text(
             text = statusLine(state),
             style = MaterialTheme.typography.titleMedium,
@@ -307,7 +326,7 @@ private fun FinderScreen(
         Spacer(Modifier.weight(1f))
 
         if (showMap) {
-            MapView(state, modifier = Modifier.fillMaxWidth().height(if (showSettings) 200.dp else 280.dp))
+            MapView(state, modifier = Modifier.fillMaxWidth().height(if (state.debug) 200.dp else 280.dp))
             mapNote(state)?.let {
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -349,7 +368,7 @@ private fun FinderScreen(
 
         Spacer(Modifier.weight(1f))
 
-        if (showSettings) {
+        if (state.debug) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -357,40 +376,16 @@ private fun FinderScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = 8.dp),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(stringResource(R.string.flip_arrow), color = Muted)
-                    Switch(checked = state.mirror, onCheckedChange = onMirror)
+                state.frameInfo?.let {
+                    Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(stringResource(R.string.debug_info), color = Muted)
-                    Switch(checked = state.debug, onCheckedChange = onDebug)
+                state.rawReading?.let {
+                    Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                 }
-                if (state.debug) {
-                    state.frameInfo?.let {
-                        Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                    }
-                    state.rawReading?.let {
-                        Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                    }
-                    state.log.forEach {
-                        Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                    }
+                state.log.forEach {
+                    Text(it, color = Muted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                 }
             }
-        }
-        TextButton(onClick = { showSettings = !showSettings }) {
-            Text(
-                stringResource(if (showSettings) R.string.settings_hide else R.string.settings_show),
-                color = Muted,
-            )
         }
         Button(
             onClick = onStop,

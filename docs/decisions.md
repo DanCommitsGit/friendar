@@ -14,13 +14,19 @@ Both phones advertise and scan at once, and the one with the lower nonce connect
 
 Some phone pairs only produce measurements when one particular phone is UWB controller. The BLE host therefore flips the assignment after each failed attempt and remembers the one that worked. Do not hardcode controller to the host.
 
-## Mirror defaults to true
+## The azimuth sign is detected, and assumed reversed until it is
 
-The UWB azimuth sign comes out reversed on both test phones (Samsung S22 Ultra and S23 Ultra), so the mirror setting defaults to on. It is exposed as a setting because other hardware may differ. The androidx.core.uwb documentation gives the azimuth range (-90 to 90) but not which sign is left or right, and no public report of the same behavior on other phones was found.
+On both test phones (Samsung S22 Ultra and S23 Ultra) the raw UWB azimuth is positive when the peer is to the left of the phone and negative when it is to the right, checked with the debug readout. The androidx.core.uwb documentation gives the azimuth range (-90 to 90) but not which sign is left or right, and no public report of the same behavior on other phones was found, so it cannot be assumed for all hardware.
+
+Flip arrow is Yes, No or Auto. Auto compares where each sign would put the friend with the GPS bearing, using the compass alone for north (`FlipDetector`). It needs good fixes on both phones, a UWB range over 8 m and a reliable compass, so it mostly decides outdoors. The verdict is saved and used from the start of the next search. Until anything is learned, Auto behaves like Yes.
 
 ## Distance units follow the locale
 
-Feet are the default in the US, Liberia and Myanmar, meters elsewhere. Tapping the small distance under the big one swaps the two and the choice is remembered.
+Units are Auto, Metric or Imperial. Auto uses feet in the US, Liberia and Myanmar and meters elsewhere. Tapping the small distance under the big one swaps the two and sets the unit explicitly.
+
+## Background search is a setting
+
+With Keep searching in the background on, a foreground service holds the search while another app is in front. With it off there is no service and the search ends when the app leaves the foreground.
 
 ## Technical readings sit behind the debug switch
 

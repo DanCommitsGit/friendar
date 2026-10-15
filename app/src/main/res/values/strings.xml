@@ -3,7 +3,6 @@
     <string name="app_name">Friendar</string>
 
     <string name="home_find">Find my friend</string>
-    <string name="home_hint">Your friend taps the same button on their phone.</string>
     <string name="permission_needed">Friendar needs the Nearby devices permission to find your friend.</string>
     <string name="open_settings">Open settings</string>
 
@@ -38,11 +37,58 @@
     <string name="map_note_ring">Your friend is somewhere on the dashed ring.</string>
     <string name="map_note_waiting">Waiting for a position.</string>
 
-    <string name="settings_show">Settings</string>
-    <string name="settings_hide">Hide settings</string>
-    <string name="flip_arrow">Flip arrow left and right</string>
+    <string name="settings">Settings</string>
+    <string name="back">Back</string>
+    <string name="setting_background">Keep searching in the background</string>
+    <string name="setting_background_detail">Shows a notification while searching.</string>
+    <string name="setting_flip">Flip arrow</string>
+    <string name="flip_yes">Yes</string>
+    <string name="flip_no">No</string>
+    <string name="flip_auto">Auto</string>
+    <string name="flip_auto_unknown">Decided while searching</string>
+    <string name="flip_auto_flipped">Currently flipped</string>
+    <string name="flip_auto_normal">Currently not flipped</string>
+    <string name="setting_units">Units</string>
+    <string name="units_auto">Auto</string>
+    <string name="units_metric">Metric</string>
+    <string name="units_imperial">Imperial</string>
+    <string name="units_auto_metric">Following your phone: meters</string>
+    <string name="units_auto_imperial">Following your phone: feet</string>
     <string name="debug_info">Debug info</string>
     <string name="stop">Stop</string>
+
+    <string name="this_phone">This phone</string>
+    <string name="this_phone_summary">%1$d of %2$d features supported</string>
+    <string name="section_ranging">Ranging</string>
+    <string name="section_direction">Direction</string>
+    <string name="feature_bluetooth">Bluetooth</string>
+    <string name="feature_bluetooth_detail">Finds your friend and estimates distance</string>
+    <string name="feature_uwb">UWB</string>
+    <string name="feature_uwb_detail">Precise distance and direction</string>
+    <string name="feature_wifi_aware">Wi-Fi Aware</string>
+    <string name="feature_wifi_aware_detail">Reaches your friend over Wi-Fi</string>
+    <string name="feature_wifi_ranging">Wi-Fi ranging</string>
+    <string name="feature_wifi_ranging_detail">Distance through walls</string>
+    <string name="feature_gps">GPS</string>
+    <string name="feature_gps_detail">Direction when UWB has no clear line</string>
+    <string name="feature_compass">Compass</string>
+    <string name="feature_compass_detail">Keeps the arrow steady as you turn</string>
+    <string name="feature_supported">Supported</string>
+    <string name="feature_missing">Not on this phone</string>
+    <string name="feature_off">Turned off</string>
+
+    <string name="permissions">Permissions</string>
+    <string name="permissions_all_allowed">All allowed</string>
+    <string name="permissions_missing">Not allowed: %1$s</string>
+    <string name="permission_nearby">Nearby devices</string>
+    <string name="permission_nearby_detail">Finds your friend. Required.</string>
+    <string name="permission_location">Location</string>
+    <string name="permission_location_detail">GPS direction and the map</string>
+    <string name="permission_notifications">Notifications</string>
+    <string name="permission_notifications_detail">Shown while searching</string>
+    <string name="permission_allowed">Allowed</string>
+    <string name="permission_denied">Not allowed</string>
+    <string name="permission_allow">Allow</string>
 
     <string name="link_lost">Lost the Bluetooth link. Searching again.</string>
     <string name="uwb_not_starting">Precise ranging isn\'t starting. Using Bluetooth signal.</string>

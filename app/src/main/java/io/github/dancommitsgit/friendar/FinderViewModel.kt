@@ -40,6 +40,10 @@ enum class Phase { Idle, Waiting, Ranging, Failed }
 
 enum class RangeSource { Uwb, Wifi, Bluetooth }
 
+enum class FlipMode { Yes, No, Auto }
+
+enum class UnitMode { Auto, Metric, Imperial }
+
 data class FinderState(
     /** Which side of the Bluetooth link this phone ended up on; null until linked. */
     val role: Role? = null,
@@ -80,9 +84,16 @@ data class FinderState(
     val message: String? = null,
     /** Suggestion shown when a step is taking unusually long. */
     val hint: String? = null,
+    val flipMode: FlipMode = FlipMode.Auto,
+    /** What Auto resolves to: true when negating the UWB azimuth fits GPS and compass; null until learned. */
+    val flipAuto: Boolean? = null,
+    /** Whether the UWB azimuth is negated right now, however that was decided. */
     val mirror: Boolean = true,
+    val unitMode: UnitMode = UnitMode.Auto,
     /** Show distances in meters instead of feet. */
     val metric: Boolean = true,
+    /** Keep searching while the app is not in front. */
+    val background: Boolean = true,
     /** Show measurement sources and raw readings. */
     val debug: Boolean = false,
     val rawReading: String? = null,
@@ -109,6 +120,13 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
 
     private val awareTrend = RangeTrend()
     private val frameCalibrator = FrameCalibrator()
+    private val flipDetector = FlipDetector()
+
+    private class Reading(val azimuthDeg: Float, val elevationDeg: Float, val rotation: FloatArray, val timeMs: Long)
+
+    /** Latest UWB angle with the phone attitude it was taken at, as reported before any flip. */
+    @Volatile
+    private var lastReading: Reading? = null
 
     /** Bearing to the friend from GPS, in the gyroscope frame; refreshed once a second. */
     @Volatile
@@ -165,6 +183,8 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         failedAttempts = 0
         rangingStarted = false
         workingControllerIsHost = null
+        flipDetector.reset()
+        lastReading = null
         _state.value = freshState(Phase.Waiting)
         log("${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}")
         val pm = getApplication<Application>().packageManager
@@ -174,7 +194,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         )
         orientation.start()
         logRangingCapabilities()
-        startService()
+        if (_state.value.background) startService()
         aware = AwareLink(getApplication(), this).also { it.start() }
         locations = LocationTracker(getApplication(), ::onFix).also {
             if (!it.start()) log("Location: unavailable (permission or location is off)")
@@ -195,16 +215,32 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         openLink()
     }
 
-    fun setMirror(value: Boolean) {
-        prefs.edit().putBoolean(PREF_MIRROR, value).apply()
-        directionFilter.reset()
-        arrowSmoother.reset()
-        _state.update { it.copy(mirror = value) }
+    fun setFlipMode(mode: FlipMode) {
+        prefs.edit().putString(PREF_FLIP, mode.name).apply()
+        val mirror = mirrorFor(mode, _state.value.flipAuto)
+        if (mirror != _state.value.mirror) onMirrorChanged()
+        _state.update { it.copy(flipMode = mode, mirror = mirror) }
     }
 
-    fun setMetric(value: Boolean) {
-        prefs.edit().putBoolean(PREF_METRIC, value).apply()
-        _state.update { it.copy(metric = value) }
+    fun setUnitMode(mode: UnitMode) {
+        prefs.edit().putString(PREF_UNITS, mode.name).apply()
+        _state.update { it.copy(unitMode = mode, metric = metricFor(mode)) }
+    }
+
+    /** Sets the unit explicitly, as when the distance readout is tapped. */
+    fun setMetric(value: Boolean) = setUnitMode(if (value) UnitMode.Metric else UnitMode.Imperial)
+
+    fun setBackground(value: Boolean) {
+        prefs.edit().putBoolean(PREF_BACKGROUND, value).apply()
+        _state.update { it.copy(background = value) }
+        if (_state.value.phase == Phase.Idle) return
+        if (value) startService() else stopService()
+    }
+
+    /** Called when the app leaves the foreground. */
+    fun onAppHidden() {
+        val s = _state.value
+        if (!s.background && s.phase != Phase.Idle) stop()
     }
 
     fun setDebug(value: Boolean) {
@@ -212,14 +248,44 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         _state.update { it.copy(debug = value) }
     }
 
-    private fun freshState(phase: Phase = Phase.Idle) = FinderState(
-        phase = phase,
-        mirror = prefs.getBoolean(PREF_MIRROR, true),
-        metric = prefs.getBoolean(PREF_METRIC, usesMetric()),
-        debug = prefs.getBoolean(PREF_DEBUG, false),
-    )
+    private fun freshState(phase: Phase = Phase.Idle): FinderState {
+        val flipMode = enumPref(PREF_FLIP, FlipMode.Auto)
+        val unitMode = enumPref(PREF_UNITS, UnitMode.Auto)
+        val learned = if (prefs.contains(PREF_FLIP_LEARNED)) prefs.getBoolean(PREF_FLIP_LEARNED, true) else null
+        return FinderState(
+            phase = phase,
+            flipMode = flipMode,
+            flipAuto = learned,
+            mirror = mirrorFor(flipMode, learned),
+            unitMode = unitMode,
+            metric = metricFor(unitMode),
+            background = prefs.getBoolean(PREF_BACKGROUND, true),
+            debug = prefs.getBoolean(PREF_DEBUG, false),
+        )
+    }
 
-    private fun usesMetric() = Locale.getDefault().country !in IMPERIAL_COUNTRIES
+    private inline fun <reified T : Enum<T>> enumPref(key: String, default: T): T =
+        prefs.getString(key, null)?.let { name -> enumValues<T>().firstOrNull { it.name == name } } ?: default
+
+    /** Both test phones report the azimuth with the wrong sign, so that is the guess before anything is learned. */
+    private fun mirrorFor(mode: FlipMode, auto: Boolean?) = when (mode) {
+        FlipMode.Yes -> true
+        FlipMode.No -> false
+        FlipMode.Auto -> auto ?: true
+    }
+
+    private fun metricFor(mode: UnitMode) = when (mode) {
+        UnitMode.Metric -> true
+        UnitMode.Imperial -> false
+        UnitMode.Auto -> Locale.getDefault().country !in IMPERIAL_COUNTRIES
+    }
+
+    /** Readings and calibration made with the other sign no longer describe the friend's direction. */
+    private fun onMirrorChanged() {
+        directionFilter.reset()
+        arrowSmoother.reset()
+        frameCalibrator.reset()
+    }
 
     private fun string(id: Int) = getApplication<Application>().getString(id)
 
@@ -241,9 +307,8 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         gpsBearing = null
         frame = null
         lastAwareMs = 0L
-        getApplication<Application>().stopService(
-            Intent(getApplication(), LocatorService::class.java),
-        )
+        lastReading = null
+        stopService()
         _state.value = freshState()
     }
 
@@ -252,6 +317,11 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         runCatching {
             ContextCompat.startForegroundService(app, Intent(app, LocatorService::class.java))
         }
+    }
+
+    private fun stopService() {
+        val app = getApplication<Application>()
+        app.stopService(Intent(app, LocatorService::class.java))
     }
 
     override fun onCleared() {
@@ -500,6 +570,42 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         )
     }
 
+    /**
+     * Compares where each azimuth sign would put the friend with the GPS bearing, using the
+     * compass alone for north so that a wrong sign cannot leak into the reference.
+     */
+    private fun checkFlip(now: Long) {
+        val reading = lastReading?.takeIf { now - it.timeMs < FLIP_READING_MAX_AGE_MS } ?: return
+        val (me, friend) = freshFixes(now) ?: return
+        val range = _state.value.distanceM ?: return
+        val north = orientation.northOffsetRad?.takeIf { orientation.northReliable } ?: return
+        val positionSigma = hypot(me.accuracyM, friend.accuracyM)
+        if (positionSigma > CALIBRATION_MAX_GPS_ERROR_M) return
+        if (range < maxOf(CALIBRATION_MIN_RANGE_M, 3f * positionSigma)) return
+
+        val reported = Geometry.deviceVector(reading.azimuthDeg, reading.elevationDeg)
+        if (Geometry.weight(Geometry.offBoresightDeg(reported)) < FLIP_MIN_WEIGHT) return
+        val negated = Geometry.deviceVector(-reading.azimuthDeg, reading.elevationDeg)
+
+        val offset = Geo.offset(me, friend)
+        val trueBearing = wrapPositive(Math.toDegrees(atan2(offset[0], offset[1]).toDouble()).toFloat())
+        val frameDeg = wrapPositive(Math.toDegrees(north.toDouble()).toFloat() - declinationDeg)
+        val gpsSigma = Math.toDegrees(atan2(positionSigma, range).toDouble()).toFloat()
+        flipDetector.add(
+            reportedBearing = bearingOf(Geometry.toWorld(reading.rotation, reported)),
+            negatedBearing = bearingOf(Geometry.toWorld(reading.rotation, negated)),
+            referenceBearing = wrapPositive(trueBearing + frameDeg),
+            sigmaDeg = hypot(gpsSigma, COMPASS_SIGMA_DEG),
+        )
+        val verdict = flipDetector.verdict ?: return
+        if (verdict == _state.value.flipAuto) return
+        log("Flip: ${if (verdict) "azimuth is reversed" else "azimuth is correct"} (score %.1f)".format(Locale.US, flipDetector.score))
+        prefs.edit().putBoolean(PREF_FLIP_LEARNED, verdict).apply()
+        val mirror = mirrorFor(_state.value.flipMode, verdict)
+        if (mirror != _state.value.mirror) onMirrorChanged()
+        _state.update { it.copy(flipAuto = verdict, mirror = mirror) }
+    }
+
     /** One direction from UWB and GPS, in the gyroscope frame, with the vertical angle from UWB. */
     private class Fused(val bearing: Bearing, val elevationDeg: Float, val source: DirectionSource) {
         val world: FloatArray
@@ -670,6 +776,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
             }
         }
         shareLocation(now)
+        checkFlip(now)
         calibrate(now)
         updateMap()
         val s = _state.value
@@ -910,6 +1017,7 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
             position.elevation?.value?.let { "%.0f".format(Locale.US, it) } ?: "-",
         )
         if (azimuth != null && r != null) {
+            lastReading = Reading(azimuth, elevation, r, lastPositionMs)
             val signed = if (_state.value.mirror) -azimuth else azimuth
             val local = Geometry.deviceVector(signed, elevation)
             val off = Geometry.offBoresightDeg(local)
@@ -970,9 +1078,13 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
 
     private companion object {
         const val TAG = "Friendar"
-        const val PREF_MIRROR = "mirror"
-        const val PREF_METRIC = "metric"
+        const val PREF_FLIP = "flip"
+        const val PREF_FLIP_LEARNED = "flip_learned"
+        const val PREF_UNITS = "units"
+        const val PREF_BACKGROUND = "background"
         const val PREF_DEBUG = "debug"
+        const val FLIP_READING_MAX_AGE_MS = 1_500L
+        const val FLIP_MIN_WEIGHT = 0.2f
         val IMPERIAL_COUNTRIES = setOf("US", "LR", "MM")
         const val UWB_SIGMA_DEG = 12f
         const val UWB_AGING_DEG_PER_S = 2f
