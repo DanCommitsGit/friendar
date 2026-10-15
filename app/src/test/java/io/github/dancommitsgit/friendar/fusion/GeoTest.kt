@@ -1,5 +1,7 @@
-package io.github.dancommitsgit.friendar
+package io.github.dancommitsgit.friendar.fusion
 
+import io.github.dancommitsgit.friendar.link.Message
+import io.github.dancommitsgit.friendar.link.Protocol
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull

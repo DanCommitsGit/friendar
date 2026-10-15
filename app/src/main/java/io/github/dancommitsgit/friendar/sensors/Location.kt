@@ -1,4 +1,4 @@
-package io.github.dancommitsgit.friendar
+package io.github.dancommitsgit.friendar.sensors
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -8,6 +8,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Looper
 import android.os.SystemClock
+import io.github.dancommitsgit.friendar.fusion.Fix
 
 /** Delivers the best recent position from the GPS, fused and network providers on the main thread. */
 @SuppressLint("MissingPermission")

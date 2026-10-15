@@ -1,4 +1,4 @@
-package io.github.dancommitsgit.friendar
+package io.github.dancommitsgit.friendar.fusion
 
 import kotlin.math.abs
 import kotlin.math.max

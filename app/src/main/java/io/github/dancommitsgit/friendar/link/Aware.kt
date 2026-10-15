@@ -1,4 +1,4 @@
-package io.github.dancommitsgit.friendar
+package io.github.dancommitsgit.friendar.link
 
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver

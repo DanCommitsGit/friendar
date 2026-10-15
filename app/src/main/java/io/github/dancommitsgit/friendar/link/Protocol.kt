@@ -1,5 +1,6 @@
-package io.github.dancommitsgit.friendar
+package io.github.dancommitsgit.friendar.link
 
+import io.github.dancommitsgit.friendar.finder.Role
 import java.nio.ByteBuffer
 
 /** Messages exchanged over the BLE link before and during UWB ranging. */

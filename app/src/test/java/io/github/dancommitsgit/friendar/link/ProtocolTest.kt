@@ -1,4 +1,4 @@
-package io.github.dancommitsgit.friendar
+package io.github.dancommitsgit.friendar.link
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals

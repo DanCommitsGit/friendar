@@ -1,4 +1,4 @@
-package io.github.dancommitsgit.friendar
+package io.github.dancommitsgit.friendar.link
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
@@ -26,6 +26,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
+import io.github.dancommitsgit.friendar.R
 import java.nio.ByteBuffer
 import java.util.UUID
 

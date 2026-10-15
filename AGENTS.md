@@ -6,7 +6,7 @@ Android app (Kotlin, Compose) that points two nearby phones at each other using 
 
 ```bash
 ./gradlew testDebugUnitTest
-./gradlew testDebugUnitTest --tests "io.github.dancommitsgit.friendar.DirectionTest"
+./gradlew testDebugUnitTest --tests "io.github.dancommitsgit.friendar.fusion.DirectionTest"
 ./gradlew assembleRelease
 ```
 
