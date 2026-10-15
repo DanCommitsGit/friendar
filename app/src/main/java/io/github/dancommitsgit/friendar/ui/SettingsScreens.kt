@@ -665,22 +665,22 @@ private fun PermissionsContent(
     }
 }
 
-
 @PhonePreviews
 @Composable
 private fun SettingsPreview() {
-    PreviewTheme {
+    var state by remember { mutableStateOf(FinderState()) }
+    PreviewTheme(state.themeMode) {
         SettingsContent(
-            state = FinderState(),
+            state = state,
             featuresAvailable = 5,
             featuresTotal = 6,
             missingPermissions = listOf("Nearby devices"),
             onBack = {},
-            onFlip = {},
-            onUnits = {},
-            onTheme = {},
-            onBackground = {},
-            onDebug = {},
+            onFlip = { state = state.copy(flipMode = it) },
+            onUnits = { state = state.copy(unitMode = it, metric = it != UnitMode.Imperial) },
+            onTheme = { state = state.copy(themeMode = it) },
+            onBackground = { state = state.copy(background = it) },
+            onDebug = { state = state.copy(debug = it) },
             onOpenPhone = {},
             onOpenPermissions = {},
         )
@@ -708,10 +708,13 @@ private fun PhonePreview() {
 @PhonePreviews
 @Composable
 private fun PermissionsPreview() {
+    var allowed by remember {
+        mutableStateOf(permissionGroups.mapIndexed { index, group -> group to (index != 0) }.toMap())
+    }
     PreviewTheme {
         PermissionsContent(
-            allowed = permissionGroups.mapIndexed { index, group -> group to (index != 0) }.toMap(),
-            onRequest = {},
+            allowed = allowed,
+            onRequest = { group -> allowed = allowed + (group to true) },
             onOpenSettings = {},
             onBack = {},
         )

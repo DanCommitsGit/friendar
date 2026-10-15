@@ -7,6 +7,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
+import io.github.dancommitsgit.friendar.finder.ThemeMode
 
 /** Light and dark on a phone-sized canvas. */
 @Preview(name = "Light", device = Devices.PIXEL_7)
@@ -14,8 +15,13 @@ import androidx.compose.ui.tooling.preview.Preview
 internal annotation class PhonePreviews
 
 @Composable
-internal fun PreviewTheme(content: @Composable () -> Unit) {
-    FriendarTheme(dark = isSystemInDarkTheme()) {
+internal fun PreviewTheme(themeMode: ThemeMode = ThemeMode.System, content: @Composable () -> Unit) {
+    val dark = when (themeMode) {
+        ThemeMode.System -> isSystemInDarkTheme()
+        ThemeMode.Light -> false
+        ThemeMode.Dark -> true
+    }
+    FriendarTheme(dark = dark) {
         Surface(
             color = MaterialTheme.colorScheme.background,
             contentColor = MaterialTheme.colorScheme.onBackground,

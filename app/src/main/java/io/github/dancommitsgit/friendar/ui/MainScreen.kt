@@ -48,6 +48,9 @@ import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -378,18 +381,19 @@ private fun SearchContent(
 
 private enum class Graphic { Arrow, Map, Waiting }
 
-
 @Composable
-private fun Main(state: FinderState, showMap: Boolean = false, permissionDenied: Boolean = false) {
+private fun Main(initial: FinderState, showMap: Boolean = false, permissionDenied: Boolean = false) {
+    var state by remember { mutableStateOf(initial) }
+    var map by remember { mutableStateOf(showMap) }
     PreviewTheme {
         MainScreen(
             state = state,
-            showMap = showMap,
-            onShowMap = {},
+            showMap = map,
+            onShowMap = { map = it },
             permissionDenied = permissionDenied,
-            onStart = {},
-            onStop = {},
-            onMetric = {},
+            onStart = { state = FinderState(phase = Phase.Waiting, metric = state.metric) },
+            onStop = { state = FinderState(metric = state.metric) },
+            onMetric = { state = state.copy(metric = it) },
             onSettings = {},
         )
     }
