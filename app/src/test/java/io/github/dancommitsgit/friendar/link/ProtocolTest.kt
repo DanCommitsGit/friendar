@@ -58,8 +58,75 @@ class ProtocolTest {
     }
 
     @Test
+    fun locationRoundTrips() {
+        val decoded = Protocol.decode(
+            Protocol.encode(Message.Location(400_000_000, -750_000_000, 12)),
+        ) as Message.Location
+        assertEquals(400_000_000, decoded.latE7)
+        assertEquals(-750_000_000, decoded.lonE7)
+        assertEquals(12, decoded.accuracyM)
+    }
+
+    @Test
+    fun locationAccuracyIsClampedToTwoUnsignedBytes() {
+        val huge = Protocol.decode(Protocol.encode(Message.Location(0, 0, 70_000))) as Message.Location
+        assertEquals(0xFFFF, huge.accuracyM)
+        val negative = Protocol.decode(Protocol.encode(Message.Location(0, 0, -5))) as Message.Location
+        assertEquals(0, negative.accuracyM)
+    }
+
+    @Test
+    fun attemptNumbersUseTheFullUnsignedByte() {
+        val role = Protocol.decode(Protocol.encode(Message.Role(255, true))) as Message.Role
+        assertEquals(255, role.attempt)
+        val join = Protocol.decode(Protocol.encode(Message.Join(200, byteArrayOf(1, 2)))) as Message.Join
+        assertEquals(200, join.attempt)
+        val retry = Protocol.decode(Protocol.encode(Message.Retry(130))) as Message.Retry
+        assertEquals(130, retry.attempt)
+    }
+
+    @Test
+    fun everyMessageFitsInADefaultBlePayload() {
+        val messages = listOf(
+            Message.Role(1, true),
+            Message.Join(1, byteArrayOf(1, 2)),
+            Message.Retry(1),
+            Message.Rssi(-90),
+            Message.NoUwb,
+            Message.Location(Int.MIN_VALUE, Int.MAX_VALUE, 0xFFFF),
+            Message.Heartbeat,
+        )
+        for (message in messages) {
+            val size = Protocol.encode(message).size
+            assertTrue("${message::class.simpleName} was $size bytes", size <= 20)
+        }
+    }
+
+    @Test
+    fun truncatedMessagesAreRejected() {
+        val messages = listOf(
+            Message.Role(1, true),
+            Message.Join(1, byteArrayOf(1, 2)),
+            Message.Start(1, byteArrayOf(1, 2), 9, 12, 7, ByteArray(Protocol.SESSION_KEY_SIZE)),
+            Message.Retry(1),
+            Message.Rssi(-60),
+            Message.Location(1, 2, 3),
+        )
+        for (message in messages) {
+            val bytes = Protocol.encode(message)
+            for (length in 1 until bytes.size) {
+                assertNull(
+                    "${message::class.simpleName} cut to $length bytes",
+                    Protocol.decode(bytes.copyOf(length)),
+                )
+            }
+        }
+    }
+
+    @Test
     fun malformedInputIsRejected() {
         assertNull(Protocol.decode(byteArrayOf()))
+        assertNull(Protocol.decode(byteArrayOf(0)))
         assertNull(Protocol.decode(byteArrayOf(99)))
         assertNull(Protocol.decode(byteArrayOf(2, 0, 2, 1)))
     }

@@ -50,6 +50,13 @@ class SignalTest {
     }
 
     @Test
+    fun rangeTrendDetectsApproach() {
+        val t = RangeTrend()
+        listOf(30f, 29f, 27f, 25f, 22f, 20f, 18f, 16f).forEachIndexed { i, d -> t.add(i * 1000L, d) }
+        assertEquals(Trend.Closer, t.trend())
+    }
+
+    @Test
     fun distanceBands() {
         assertEquals("Under 10 ft", roughDistanceText(2f, metric = false))
         assertEquals("25–50 ft", roughDistanceText(10f, metric = false))

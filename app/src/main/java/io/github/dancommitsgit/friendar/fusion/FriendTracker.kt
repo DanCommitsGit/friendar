@@ -103,6 +103,8 @@ class FriendTracker {
 
     /** Forgets everything learned during a search. */
     fun clear() {
+        forgetDirection()
+        lastGoodDirectionMs = 0L
         frameCalibrator.reset()
         flipDetector.reset()
         gpsBearing = null

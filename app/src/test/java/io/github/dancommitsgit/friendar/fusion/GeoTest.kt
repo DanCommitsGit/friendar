@@ -1,7 +1,5 @@
 package io.github.dancommitsgit.friendar.fusion
 
-import io.github.dancommitsgit.friendar.link.Message
-import io.github.dancommitsgit.friendar.link.Protocol
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -62,23 +60,5 @@ class GeoTest {
     @Test
     fun noEstimateWithoutAnyData() {
         assertNull(Fusion.estimate(null, null, 10f, 1f, null))
-    }
-
-    @Test
-    fun rangeTrendDetectsApproach() {
-        val t = RangeTrend()
-        listOf(30f, 29f, 27f, 25f, 22f, 20f, 18f, 16f).forEachIndexed { i, d -> t.add(i * 1000L, d) }
-        assertEquals(Trend.Closer, t.trend())
-    }
-
-    @Test
-    fun locationRoundTrips() {
-        val decoded = Protocol.decode(
-            Protocol.encode(Message.Location(400_000_000, -750_000_000, 12)),
-        ) as Message.Location
-        assertEquals(400_000_000, decoded.latE7)
-        assertEquals(-750_000_000, decoded.lonE7)
-        assertEquals(12, decoded.accuracyM)
-        assertTrue(Protocol.encode(Message.Location(0, 0, 0)).size <= 20)
     }
 }
