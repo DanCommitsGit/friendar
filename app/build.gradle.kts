@@ -4,6 +4,19 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Set by the Release workflow. Local builds use version 1.0 and the debug key.
+val releaseVersion: String? = System.getenv("FRIENDAR_VERSION")
+val releaseKeystore: String? = System.getenv("FRIENDAR_KEYSTORE_FILE")
+
+// versionCode is major * 10000 + minor * 100 + patch.
+val releaseVersionCode: Int? = releaseVersion?.let { version ->
+    val parts = version.split(".").map { it.toIntOrNull() }
+    require(parts.size == 3 && parts.all { it != null && it in 0..99 }) {
+        "FRIENDAR_VERSION must look like 1.2.3 with each part under 100, got '$version'"
+    }
+    parts[0]!! * 10_000 + parts[1]!! * 100 + parts[2]!!
+}
+
 android {
     namespace = "io.github.dancommitsgit.friendar"
     compileSdk = 36
@@ -13,8 +26,19 @@ android {
         applicationId = "io.github.dancommitsgit.friendar"
         minSdk = 31
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = releaseVersionCode ?: 1
+        versionName = releaseVersion ?: "1.0"
+    }
+
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("FRIENDAR_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("FRIENDAR_KEY_ALIAS")
+                keyPassword = System.getenv("FRIENDAR_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -22,7 +46,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 
