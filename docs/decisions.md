@@ -26,7 +26,7 @@ Units are Auto, Metric or Imperial. Auto uses feet in the US, Liberia and Myanma
 
 ## Background search is a setting
 
-With Keep searching in the background on, a foreground service holds the search while another app is in front. With it off there is no service and the search ends when the app leaves the foreground.
+With Continue running in the background on, a foreground service holds the search while another app is in front. With it off there is no service and the search ends when the app leaves the foreground.
 
 ## Theme follows the system until chosen
 
