@@ -42,9 +42,11 @@ kotlin {
 }
 
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2026.02.00"))
+    implementation(platform("androidx.compose:compose-bom:2026.06.01"))
     implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.material3:material3")
+    // The BOM maps material3 to 1.4.0, which lacks the Expressive components. 1.5.0-alpha19
+    // and later need compileSdk 37, and 1.5.0-beta01 needs Android Gradle plugin 9.1.
+    implementation("androidx.compose.material3:material3:1.5.0-alpha18")
     implementation("androidx.activity:activity-compose:1.12.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
