@@ -179,19 +179,6 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
     private inline fun <reified T : Enum<T>> enumPref(key: String, default: T): T =
         prefs.getString(key, null)?.let { name -> enumValues<T>().firstOrNull { it.name == name } } ?: default
 
-    /** Both test phones report the azimuth with the wrong sign, so that is the guess before anything is learned. */
-    private fun mirrorFor(mode: FlipMode, auto: Boolean?) = when (mode) {
-        FlipMode.Yes -> true
-        FlipMode.No -> false
-        FlipMode.Auto -> auto ?: true
-    }
-
-    private fun metricFor(mode: UnitMode) = when (mode) {
-        UnitMode.Metric -> true
-        UnitMode.Imperial -> false
-        UnitMode.Auto -> Locale.getDefault().country !in IMPERIAL_COUNTRIES
-    }
-
     private fun string(id: Int) = getApplication<Application>().getString(id)
 
     fun stop() {
@@ -269,13 +256,10 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         openLink()
     }
 
-    private fun hintFor(s: FinderState): String? = when {
-        s.phase == Phase.Waiting -> string(R.string.hint_waiting)
-
-        s.phase == Phase.Ranging && s.uwbActive && s.distanceM == null && s.rssiDbm != null ->
-            string(R.string.hint_blocked)
-
-        else -> null
+    private fun hintFor(s: FinderState): String? = when (hintKindFor(s)) {
+        Hint.Waiting -> string(R.string.hint_waiting)
+        Hint.Blocked -> string(R.string.hint_blocked)
+        null -> null
     }
 
     private fun resetFilters() {
@@ -556,7 +540,6 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         const val PREF_THEME = "theme"
         const val PREF_BACKGROUND = "background"
         const val PREF_DEBUG = "debug"
-        val IMPERIAL_COUNTRIES = setOf("US", "LR", "MM")
         const val MAX_LOG_LINES = 20
         const val WATCHDOG_START_MS = 12_000L
         const val PEER_SILENT_MS = 8_000L
