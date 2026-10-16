@@ -3,7 +3,7 @@
     <string name="app_name" translatable="false">Friendar</string>
 
     <string name="home_tagline">Friend radar</string>
-    <string name="home_find">Find my friend</string>
+    <string name="start">Start</string>
     <string name="permission_needed">Friendar needs the Nearby devices permission to find your friend.</string>
     <string name="open_settings">Open app settings</string>
 

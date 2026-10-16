@@ -233,7 +233,7 @@ private fun PrimaryAction(searching: Boolean, onStart: () -> Unit, onStop: () ->
             label = "action",
         ) { active ->
             Text(
-                stringResource(if (active) R.string.stop else R.string.home_find),
+                stringResource(if (active) R.string.stop else R.string.start),
                 style = MaterialTheme.typography.titleLargeEmphasized,
             )
         }
