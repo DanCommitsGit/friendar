@@ -21,7 +21,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -414,8 +413,6 @@ private fun SettingsContent(
     onOpenPhone: () -> Unit,
     onOpenPermissions: () -> Unit,
 ) {
-    val systemDark = isSystemInDarkTheme()
-
     SettingsPage(stringResource(R.string.settings), onBack) {
         Group {
             row {
@@ -431,17 +428,16 @@ private fun SettingsContent(
                 ChoiceRow(
                     it,
                     title = stringResource(R.string.setting_flip),
-                    detail = if (state.flipMode == FlipMode.Auto) {
+                    detail = stringResource(
+                        R.string.setting_flip_detail,
                         stringResource(
                             when (state.flipAuto) {
-                                true -> R.string.flip_auto_flipped
-                                false -> R.string.flip_auto_normal
-                                null -> R.string.flip_auto_unknown
+                                true -> R.string.flip_detected_flipped
+                                false -> R.string.flip_detected_normal
+                                null -> R.string.flip_detected_unknown
                             },
-                        )
-                    } else {
-                        null
-                    },
+                        ),
+                    ),
                     options = listOf(
                         stringResource(R.string.flip_yes) to FlipMode.Yes,
                         stringResource(R.string.flip_no) to FlipMode.No,
@@ -473,11 +469,7 @@ private fun SettingsContent(
                 ChoiceRow(
                     it,
                     title = stringResource(R.string.setting_theme),
-                    detail = if (state.themeMode == ThemeMode.System) {
-                        stringResource(if (systemDark) R.string.theme_auto_dark else R.string.theme_auto_light)
-                    } else {
-                        null
-                    },
+                    detail = null,
                     options = listOf(
                         stringResource(R.string.theme_system) to ThemeMode.System,
                         stringResource(R.string.theme_light) to ThemeMode.Light,
