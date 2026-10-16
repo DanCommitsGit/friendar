@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -18,6 +19,8 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -207,14 +210,22 @@ private fun PrimaryAction(searching: Boolean, onStart: () -> Unit, onStop: () ->
         motion.defaultEffectsSpec(),
         label = "content",
     )
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(if (pressed) 0.96f else 1f, motion.fastSpatialSpec(), label = "pressScale")
     Button(
         onClick = { if (searching) onStop() else onStart() },
-        shapes = ButtonDefaults.shapes(),
+        shapes = ButtonDefaults.shapes(pressedShape = ButtonDefaults.shape),
         colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = content),
         contentPadding = ButtonDefaults.contentPaddingFor(ButtonDefaults.MediumContainerHeight),
+        interactionSource = interactionSource,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = ButtonDefaults.MediumContainerHeight),
+            .heightIn(min = ButtonDefaults.MediumContainerHeight)
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            },
     ) {
         AnimatedContent(
             targetState = searching,
