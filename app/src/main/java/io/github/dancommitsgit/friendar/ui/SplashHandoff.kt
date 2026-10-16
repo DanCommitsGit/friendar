@@ -10,7 +10,6 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.provider.Settings
 import android.view.View
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
@@ -58,8 +57,6 @@ private const val HERO_AXIS = 0.86f
 
 private const val MOVE_MS = 650L
 private const val FADE_MS = 250L
-private const val STALL_MS = 1500L
-
 /** How long after the first frame the hero shows anyway when the splash has not exited. */
 internal const val EXIT_WAIT_MS = 300L
 
@@ -157,15 +154,6 @@ internal class SplashHandoff(pending: Boolean) {
         val colors = ArgbEvaluator()
         val background = splash.background?.mutate()
 
-        var finished = false
-        fun finish() {
-            if (finished) return
-            finished = true
-            show()
-            // The hero's own shape and arrow sit under the overlays for a frame or two before the splash goes.
-            splash.postOnAnimation { splash.postOnAnimation { splash.remove() } }
-        }
-
         ValueAnimator.ofFloat(0f, 1f).apply {
             duration = MOVE_MS
             interpolator = EASE
@@ -179,12 +167,14 @@ internal class SplashHandoff(pending: Boolean) {
                 background?.alpha = ((1f - f) * 255f).toInt()
             }
             addListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) = finish()
+                override fun onAnimationEnd(animation: Animator) {
+                    show()
+                    // The hero's own shape and arrow sit under the overlays for a frame or two before the splash goes.
+                    splash.postOnAnimation { splash.postOnAnimation { splash.remove() } }
+                }
             })
             start()
         }
-        val durationScale = Settings.Global.getFloat(splash.context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
-        splash.postDelayed(::finish, STALL_MS + (MOVE_MS * durationScale).toLong())
     }
 }
 
