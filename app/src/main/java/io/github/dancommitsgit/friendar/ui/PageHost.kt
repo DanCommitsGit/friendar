@@ -1,6 +1,5 @@
 package io.github.dancommitsgit.friendar.ui
 
-import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
@@ -24,12 +23,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
@@ -69,7 +65,6 @@ internal fun PageHost(
     val saveable = rememberSaveableStateHolder()
     val seekable = remember { SeekableTransitionState(current) }
     val transition = rememberTransition(seekable, label = "page")
-    var fromRight by remember { mutableStateOf(false) }
     // Critically damped, so the fraction never passes 1 and the page never overshoots its place.
     val settle = remember { spring<Float>(dampingRatio = 1f, stiffness = 380f) }
 
@@ -79,7 +74,6 @@ internal fun PageHost(
         val below = stack[stack.size - 2]
         try {
             events.collect { event ->
-                fromRight = event.swipeEdge == BackEventCompat.EDGE_RIGHT
                 seekable.seekTo(event.progress * GESTURE_REACH, below)
             }
             onBack()
@@ -106,18 +100,17 @@ internal fun PageHost(
             val scale = tween<Float>(PAGE_MS, easing = LinearEasing)
             val quick = tween<Float>(PAGE_MS / 3, easing = LinearEasing)
             val forward = targetState.depth > initialState.depth
-            val sign = if (fromRight) -1 else 1
             // Going forward the new page slides over the old one; going back it is dragged away to
             // show the old one, which is not faded so the page under the finger stays solid.
             val enter = if (forward) {
                 slideInHorizontally(offset) { it } + fadeIn(quick)
             } else {
-                slideInHorizontally(offset) { -sign * it / 4 }
+                slideInHorizontally(offset) { -it / 4 }
             }
             val exit = if (forward) {
                 slideOutHorizontally(offset) { -it / 4 } + fadeOut(quick)
             } else {
-                slideOutHorizontally(offset) { sign * it } + scaleOut(scale, targetScale = 0.9f)
+                slideOutHorizontally(offset) { it } + scaleOut(scale, targetScale = 0.9f)
             }
             // The page that is deeper in the stack stays on top while either one is moving.
             ContentTransform(enter, exit, targetContentZIndex = targetState.depth.toFloat(), sizeTransform = null)
