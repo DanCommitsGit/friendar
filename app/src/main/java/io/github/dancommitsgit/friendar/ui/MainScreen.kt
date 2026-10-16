@@ -59,6 +59,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -148,47 +151,81 @@ private fun IdleContent(permissionDenied: Boolean) {
         animationSpec = infiniteRepeatable(tween(60_000, easing = LinearEasing), RepeatMode.Restart),
         label = "rotation",
     )
+    val handoff = LocalSplashHandoff.current
+    val arrowColor = scheme.onPrimaryContainer
+    val blobColor = scheme.primaryContainer
+    DisposableEffect(handoff) {
+        onDispose {
+            handoff.arrowBounds = null
+            handoff.blobBounds = null
+        }
+    }
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(modifier = Modifier.size(200.dp), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier.size(200.dp).onGloballyPositioned {
+                handoff.blobBounds = it.boundsInWindow()
+                handoff.blobColor = blobColor.toArgb()
+                handoff.blobTurn = { rotation }
+            },
+            contentAlignment = Alignment.Center,
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer { rotationZ = rotation }
+                    .graphicsLayer {
+                        rotationZ = rotation
+                        alpha = handoff.swap
+                    }
                     .clip(shape)
-                    .background(scheme.primaryContainer),
+                    .background(blobColor),
             )
-            Arrow(angleDeg = 0f, color = scheme.onPrimaryContainer, modifier = Modifier.size(84.dp))
+            Arrow(
+                angleDeg = 0f,
+                color = arrowColor,
+                modifier = Modifier
+                    .size(84.dp)
+                    .onGloballyPositioned {
+                        handoff.arrowBounds = it.boundsInWindow()
+                        handoff.arrowColor = arrowColor.toArgb()
+                    }
+                    .graphicsLayer { alpha = handoff.swap },
+            )
         }
-        Spacer(Modifier.height(24.dp))
-        Text(
-            stringResource(R.string.app_name),
-            style = MaterialTheme.typography.displaySmallEmphasized,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            stringResource(R.string.home_tagline),
-            modifier = Modifier.padding(top = 4.dp),
-            style = MaterialTheme.typography.bodyLarge,
-            color = scheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        AnimatedVisibility(
-            visible = permissionDenied,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically(),
+        Column(
+            modifier = Modifier.graphicsLayer { alpha = handoff.reveal },
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 24.dp)) {
-                Text(
-                    stringResource(R.string.permission_needed),
-                    color = MaterialTheme.warning,
-                    textAlign = TextAlign.Center,
-                )
-                TextButton(onClick = { openAppSettings(context) }) {
-                    Text(stringResource(R.string.open_settings))
+            Spacer(Modifier.height(24.dp))
+            Text(
+                stringResource(R.string.app_name),
+                style = MaterialTheme.typography.displaySmallEmphasized,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                stringResource(R.string.home_tagline),
+                modifier = Modifier.padding(top = 4.dp),
+                style = MaterialTheme.typography.bodyLarge,
+                color = scheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            AnimatedVisibility(
+                visible = permissionDenied,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 24.dp)) {
+                    Text(
+                        stringResource(R.string.permission_needed),
+                        color = MaterialTheme.warning,
+                        textAlign = TextAlign.Center,
+                    )
+                    TextButton(onClick = { openAppSettings(context) }) {
+                        Text(stringResource(R.string.open_settings))
+                    }
                 }
             }
         }
