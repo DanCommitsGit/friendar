@@ -7,6 +7,17 @@ Friend radar for Android. Follow the arrow to the friend you're looking for.
 
 Friendar points you at a friend's phone when you are both nearby, using ultra-wideband (UWB) with Bluetooth, Wi-Fi Aware and GPS as fallbacks. Open the app on two phones, tap Start, and follow the arrow. It works with no mobile signal or Wi-Fi network.
 
+<p align="center">
+  <img src="docs/images/demo.gif" width="300" alt="Tapping Start, then following the arrow to a friend 32 feet away">
+</p>
+
+<p align="center">
+  <img src="docs/images/home.png" width="23%" alt="The start screen">
+  <img src="docs/images/blocked.png" width="23%" alt="An orange arrow and a warning that something is in the way">
+  <img src="docs/images/long-range.png" width="23%" alt="An orange arrow pointing at a friend 32 feet away">
+  <img src="docs/images/map.png" width="23%" alt="The map view with a ring at the friend's distance">
+</p>
+
 ## Install
 
 Download and install `friendar-<version>.apk` from the [latest release](https://github.com/DanCommitsGit/friendar/releases/latest) on Android 12 or newer.
