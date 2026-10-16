@@ -38,7 +38,7 @@ Theme is System, Light or Dark and defaults to System. Both schemes are fixed pa
 
 ## One screen for idle and searching
 
-Find and Stop are the same button at the bottom, and the middle swaps between the idle hero and the search. A separate home screen was removed so starting and stopping do not change screens.
+Start and Stop are the same button at the bottom, and the middle swaps between the idle hero and the search. A separate home screen was removed so starting and stopping do not change screens.
 
 ## Pages are a plain back stack
 

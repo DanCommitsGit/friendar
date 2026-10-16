@@ -5,7 +5,7 @@
 
 Friend radar for Android. Follow the arrow to the friend you're looking for.
 
-Friendar points you at a friend's phone when you are both nearby, using ultra-wideband (UWB) with Bluetooth, Wi-Fi Aware and GPS as fallbacks. Open the app on two phones, tap Find, and follow the arrow. It works with no mobile signal or Wi-Fi network.
+Friendar points you at a friend's phone when you are both nearby, using ultra-wideband (UWB) with Bluetooth, Wi-Fi Aware and GPS as fallbacks. Open the app on two phones, tap Start, and follow the arrow. It works with no mobile signal or Wi-Fi network.
 
 ## Install
 
