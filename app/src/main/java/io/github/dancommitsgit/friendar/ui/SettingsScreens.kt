@@ -2,9 +2,7 @@
 
 package io.github.dancommitsgit.friendar.ui
 
-import android.app.Activity
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.Sensor
@@ -12,6 +10,7 @@ import android.hardware.SensorManager
 import android.Manifest
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
@@ -90,12 +89,6 @@ internal fun openAppSettings(context: Context) {
             Uri.fromParts("package", context.packageName, null),
         ),
     )
-}
-
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
 }
 
 private enum class FeatureState { Supported, Missing, Off }
@@ -595,10 +588,16 @@ private fun StatusIcon(icon: ImageVector, description: String, container: Color,
 @Composable
 internal fun PermissionsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val asked = remember { context.getSharedPreferences("permissions", Context.MODE_PRIVATE) }
+    val activity = LocalActivity.current
     var changes by remember { mutableIntStateOf(0) }
+    var deniedOnce by remember { mutableStateOf(emptySet<String>()) }
     val resumed = rememberResumeCount()
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        // Still denied, with no rationale and no new denial: the system answered without a dialog.
+        val unchanged = grants.isNotEmpty() && grants.all { (permission, granted) ->
+            !granted && permission !in deniedOnce && activity?.shouldShowRequestPermissionRationale(permission) == false
+        }
+        if (unchanged) openAppSettings(context)
         changes++
     }
 
@@ -606,17 +605,9 @@ internal fun PermissionsScreen(onBack: () -> Unit) {
         val missing = group.permissions.filter {
             ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
         }
-        val activity = context.findActivity()
-        val everAsked = missing.any { asked.getBoolean(it, false) }
-        val canAsk = !everAsked || missing.any {
-            activity != null && androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(activity, it)
-        }
-        if (canAsk) {
-            asked.edit().apply { missing.forEach { putBoolean(it, true) } }.apply()
-            launcher.launch(missing.toTypedArray())
-        } else {
-            openAppSettings(context)
-        }
+        if (missing.isEmpty()) return
+        deniedOnce = missing.filterTo(mutableSetOf()) { activity?.shouldShowRequestPermissionRationale(it) == true }
+        launcher.launch(missing.toTypedArray())
     }
 
     val allowed = remember(resumed, changes) { permissionGroups.associateWith { it.allowed(context) } }
