@@ -58,7 +58,10 @@ private const val HERO_AXIS = 0.86f
 
 private const val MOVE_MS = 650L
 private const val FADE_MS = 250L
-internal const val STALL_MS = 1500L
+private const val STALL_MS = 1500L
+
+/** How long after the first frame the hero shows anyway when the splash has not exited. */
+internal const val EXIT_WAIT_MS = 300L
 
 private enum class Stage { Pending, Entering, Done }
 

@@ -1,6 +1,7 @@
 package io.github.dancommitsgit.friendar
 
 import android.os.Bundle
+import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -20,7 +21,7 @@ import io.github.dancommitsgit.friendar.finder.ThemeMode
 import io.github.dancommitsgit.friendar.ui.FriendarApp
 import io.github.dancommitsgit.friendar.ui.FriendarTheme
 import io.github.dancommitsgit.friendar.ui.LocalSplashHandoff
-import io.github.dancommitsgit.friendar.ui.STALL_MS
+import io.github.dancommitsgit.friendar.ui.EXIT_WAIT_MS
 import io.github.dancommitsgit.friendar.ui.SplashHandoff
 import android.graphics.Color as AndroidColor
 
@@ -33,7 +34,15 @@ class MainActivity : ComponentActivity() {
         // A recreated activity has no splash, so its hero shows straight away.
         handoff = SplashHandoff(pending = savedInstanceState == null)
         splashScreen.setOnExitAnimationListener(handoff::run)
-        window.decorView.postDelayed(handoff::skip, STALL_MS)
+        // The exit listener runs right after the first frame; without a splash it never does.
+        val decor = window.decorView
+        decor.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                decor.viewTreeObserver.removeOnPreDrawListener(this)
+                decor.postDelayed(handoff::skip, EXIT_WAIT_MS)
+                return true
+            }
+        })
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
             val dark = when (state.themeMode) {
