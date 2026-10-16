@@ -166,6 +166,13 @@ private fun IdleContent(permissionDenied: Boolean) {
             style = MaterialTheme.typography.displaySmallEmphasized,
             textAlign = TextAlign.Center,
         )
+        Text(
+            stringResource(R.string.home_tagline),
+            modifier = Modifier.padding(top = 4.dp),
+            style = MaterialTheme.typography.bodyLarge,
+            color = scheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
         AnimatedVisibility(
             visible = permissionDenied,
             enter = fadeIn() + expandVertically(),
