@@ -78,7 +78,6 @@ internal fun FriendarApp(viewModel: FinderViewModel, state: FinderState) {
                 permissionDenied = denied && !bluetoothAllowed,
                 onStart = ::start,
                 onStop = viewModel::stop,
-                onMetric = viewModel::setMetric,
                 onSettings = { push(Page.Settings) },
             )
 

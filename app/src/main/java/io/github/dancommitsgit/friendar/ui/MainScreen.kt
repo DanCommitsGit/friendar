@@ -60,6 +60,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -85,7 +86,6 @@ internal fun MainScreen(
     permissionDenied: Boolean,
     onStart: () -> Unit,
     onStop: () -> Unit,
-    onMetric: (Boolean) -> Unit,
     onSettings: () -> Unit,
 ) {
     val searching = state.phase != Phase.Idle
@@ -121,7 +121,7 @@ internal fun MainScreen(
             label = "main",
         ) { active ->
             if (active) {
-                SearchContent(state, showMap, onShowMap, onMetric)
+                SearchContent(state, showMap, onShowMap)
             } else {
                 IdleContent(permissionDenied)
             }
@@ -235,7 +235,6 @@ private fun SearchContent(
     state: FinderState,
     showMap: Boolean,
     onShowMap: (Boolean) -> Unit,
-    onMetric: (Boolean) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val motion = MaterialTheme.motionScheme
@@ -344,20 +343,20 @@ private fun SearchContent(
         }
         Spacer(Modifier.height(16.dp))
 
-        val swapTarget = swapDistanceText(state)
-        DistanceReadout(
-            primary = distanceText(state),
-            secondary = swapTarget ?: sourceLine(state),
-            swappable = swapTarget != null,
-            primaryColor = when {
+        Text(
+            text = distanceText(state),
+            color = when {
                 close -> MaterialTheme.success
                 state.distanceM == null && state.rangeM == null -> scheme.onSurfaceVariant
                 else -> scheme.onBackground
             },
-            primarySize = if (roughDistance) 40.sp else 56.sp,
-            metric = state.metric,
-            onSwap = { onMetric(!state.metric) },
+            fontSize = if (roughDistance) 40.sp else 56.sp,
+            fontWeight = FontWeight.Bold,
         )
+        sourceLine(state)?.let {
+            Spacer(Modifier.height(4.dp))
+            Text(it, color = scheme.onSurfaceVariant, textAlign = TextAlign.Center, fontSize = 16.sp)
+        }
         levelLine(state)?.let {
             Spacer(Modifier.height(4.dp))
             Text(it, color = scheme.onSurfaceVariant, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge)
@@ -405,7 +404,6 @@ private fun Main(initial: FinderState, showMap: Boolean = false, permissionDenie
             permissionDenied = permissionDenied,
             onStart = { state = FinderState(phase = Phase.Waiting, metric = state.metric) },
             onStop = { state = FinderState(metric = state.metric) },
-            onMetric = { state = state.copy(metric = it) },
             onSettings = {},
         )
     }

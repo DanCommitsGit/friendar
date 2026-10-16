@@ -92,10 +92,6 @@ internal fun distanceText(state: FinderState): String {
     }
 }
 
-/** The same distance in the other unit; only precise readings are shown both ways. */
-internal fun swapDistanceText(state: FinderState): String? =
-    state.distanceM?.let { formatDistance(it, !state.metric) }
-
 /** For readings that are not precise, a line that says how rough they are. */
 @Composable
 internal fun sourceLine(state: FinderState): String? {
