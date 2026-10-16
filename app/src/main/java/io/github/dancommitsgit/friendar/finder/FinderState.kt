@@ -11,8 +11,6 @@ enum class Phase { Idle, Waiting, Ranging, Failed }
 
 enum class FlipMode { Yes, No, Auto }
 
-enum class UnitMode { Auto, Metric, Imperial }
-
 enum class ThemeMode { System, Light, Dark }
 
 data class FinderState(
@@ -60,7 +58,6 @@ data class FinderState(
     val flipAuto: Boolean? = null,
     /** Whether the UWB azimuth is negated right now, however that was decided. */
     val mirror: Boolean = true,
-    val unitMode: UnitMode = UnitMode.Auto,
     /** Show distances in meters instead of feet. */
     val metric: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.System,

@@ -20,7 +20,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,7 +78,6 @@ import androidx.lifecycle.Lifecycle
 import io.github.dancommitsgit.friendar.finder.FinderState
 import io.github.dancommitsgit.friendar.finder.FlipMode
 import io.github.dancommitsgit.friendar.finder.ThemeMode
-import io.github.dancommitsgit.friendar.finder.UnitMode
 import io.github.dancommitsgit.friendar.R
 
 internal fun openAppSettings(context: Context) {
@@ -363,7 +361,7 @@ internal fun SettingsScreen(
     state: FinderState,
     onBack: () -> Unit,
     onFlip: (FlipMode) -> Unit,
-    onUnits: (UnitMode) -> Unit,
+    onUnits: (Boolean) -> Unit,
     onTheme: (ThemeMode) -> Unit,
     onBackground: (Boolean) -> Unit,
     onDebug: (Boolean) -> Unit,
@@ -400,15 +398,13 @@ private fun SettingsContent(
     missingPermissions: List<String>,
     onBack: () -> Unit,
     onFlip: (FlipMode) -> Unit,
-    onUnits: (UnitMode) -> Unit,
+    onUnits: (Boolean) -> Unit,
     onTheme: (ThemeMode) -> Unit,
     onBackground: (Boolean) -> Unit,
     onDebug: (Boolean) -> Unit,
     onOpenPhone: () -> Unit,
     onOpenPermissions: () -> Unit,
 ) {
-    val systemDark = isSystemInDarkTheme()
-
     SettingsPage(stringResource(R.string.settings), onBack) {
         Group {
             row {
@@ -424,17 +420,16 @@ private fun SettingsContent(
                 ChoiceRow(
                     it,
                     title = stringResource(R.string.setting_flip),
-                    detail = if (state.flipMode == FlipMode.Auto) {
+                    detail = stringResource(
+                        R.string.setting_flip_detail,
                         stringResource(
                             when (state.flipAuto) {
-                                true -> R.string.flip_auto_flipped
-                                false -> R.string.flip_auto_normal
-                                null -> R.string.flip_auto_unknown
+                                true -> R.string.flip_detected_flipped
+                                false -> R.string.flip_detected_normal
+                                null -> R.string.flip_detected_unknown
                             },
-                        )
-                    } else {
-                        null
-                    },
+                        ),
+                    ),
                     options = listOf(
                         stringResource(R.string.flip_yes) to FlipMode.Yes,
                         stringResource(R.string.flip_no) to FlipMode.No,
@@ -448,17 +443,12 @@ private fun SettingsContent(
                 ChoiceRow(
                     it,
                     title = stringResource(R.string.setting_units),
-                    detail = if (state.unitMode == UnitMode.Auto) {
-                        stringResource(if (state.metric) R.string.units_auto_metric else R.string.units_auto_imperial)
-                    } else {
-                        null
-                    },
+                    detail = null,
                     options = listOf(
-                        stringResource(R.string.units_auto) to UnitMode.Auto,
-                        stringResource(R.string.units_metric) to UnitMode.Metric,
-                        stringResource(R.string.units_imperial) to UnitMode.Imperial,
+                        stringResource(R.string.units_metric) to true,
+                        stringResource(R.string.units_imperial) to false,
                     ),
-                    selected = state.unitMode,
+                    selected = state.metric,
                     onSelect = onUnits,
                 )
             }
@@ -466,11 +456,7 @@ private fun SettingsContent(
                 ChoiceRow(
                     it,
                     title = stringResource(R.string.setting_theme),
-                    detail = if (state.themeMode == ThemeMode.System) {
-                        stringResource(if (systemDark) R.string.theme_auto_dark else R.string.theme_auto_light)
-                    } else {
-                        null
-                    },
+                    detail = null,
                     options = listOf(
                         stringResource(R.string.theme_system) to ThemeMode.System,
                         stringResource(R.string.theme_light) to ThemeMode.Light,
@@ -668,7 +654,7 @@ private fun SettingsPreview() {
             missingPermissions = listOf("Nearby devices"),
             onBack = {},
             onFlip = { state = state.copy(flipMode = it) },
-            onUnits = { state = state.copy(unitMode = it, metric = it != UnitMode.Imperial) },
+            onUnits = { state = state.copy(metric = it) },
             onTheme = { state = state.copy(themeMode = it) },
             onBackground = { state = state.copy(background = it) },
             onDebug = { state = state.copy(debug = it) },

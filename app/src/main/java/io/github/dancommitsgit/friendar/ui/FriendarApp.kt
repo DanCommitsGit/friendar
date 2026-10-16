@@ -86,7 +86,7 @@ internal fun FriendarApp(viewModel: FinderViewModel, state: FinderState) {
                 state,
                 onBack = ::pop,
                 onFlip = viewModel::setFlipMode,
-                onUnits = viewModel::setUnitMode,
+                onUnits = viewModel::setMetric,
                 onTheme = viewModel::setThemeMode,
                 onBackground = viewModel::setBackground,
                 onDebug = viewModel::setDebug,

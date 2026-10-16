@@ -11,11 +11,8 @@ internal fun mirrorFor(mode: FlipMode, auto: Boolean?) = when (mode) {
     FlipMode.Auto -> auto ?: true
 }
 
-internal fun metricFor(mode: UnitMode, country: String = Locale.getDefault().country) = when (mode) {
-    UnitMode.Metric -> true
-    UnitMode.Imperial -> false
-    UnitMode.Auto -> country !in IMPERIAL_COUNTRIES
-}
+/** The unit used until one is chosen. */
+internal fun defaultMetric(country: String = Locale.getDefault().country) = country !in IMPERIAL_COUNTRIES
 
 /** A suggestion for a step that is taking unusually long. */
 internal enum class Hint { Waiting, Blocked }

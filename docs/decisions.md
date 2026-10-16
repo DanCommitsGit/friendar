@@ -22,11 +22,11 @@ Flip arrow is Yes, No or Auto. Auto compares where each sign would put the frien
 
 ## Distance units follow the locale
 
-Units are Auto, Metric or Imperial. Auto uses feet in the US, Liberia and Myanmar and meters elsewhere. Tapping the small distance under the big one swaps the two and sets the unit explicitly.
+Units are Metric or Imperial. Until one is chosen the locale decides: feet in the US, Liberia and Myanmar, meters elsewhere. Tapping the small distance under the big one swaps the two and saves the choice. Older installs may have `Auto` saved, which is treated as unchosen.
 
 ## Background search is a setting
 
-With Keep searching in the background on, a foreground service holds the search while another app is in front. With it off there is no service and the search ends when the app leaves the foreground.
+With Continue running in the background on, a foreground service holds the search while another app is in front. With it off there is no service and the search ends when the app leaves the foreground.
 
 ## Theme follows the system until chosen
 
