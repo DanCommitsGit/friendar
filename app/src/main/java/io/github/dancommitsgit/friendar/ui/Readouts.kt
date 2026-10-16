@@ -79,7 +79,7 @@ private fun formatDistance(meters: Float, metric: Boolean): String {
 internal fun distanceText(state: FinderState): String {
     val meters = state.distanceM
     if (meters != null) return formatDistance(meters, state.metric)
-    val range = state.rangeM ?: return "—"
+    val range = state.rangeM ?: return ""
     return when (state.rangeSource) {
         RangeSource.Wifi -> if (state.metric) {
             "~${max(2, range.roundToInt())} m"
@@ -88,7 +88,7 @@ internal fun distanceText(state: FinderState): String {
         }
 
         RangeSource.Bluetooth -> roughDistanceText(range, state.metric)
-        else -> "—"
+        else -> ""
     }
 }
 
