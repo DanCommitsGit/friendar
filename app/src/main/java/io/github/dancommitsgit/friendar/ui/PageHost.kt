@@ -4,6 +4,7 @@ import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.LinearEasing
@@ -29,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -36,6 +38,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -80,7 +84,17 @@ internal fun PageHost(
             }
             onBack()
         } catch (e: CancellationException) {
-            withContext(NonCancellable) { seekable.animateTo(current, settle) }
+            // animateTo(current) would start a new below-to-current transition and play the push
+            // animations, so the fraction is rewound on the same transition instead.
+            withContext(NonCancellable) {
+                val fraction = Animatable(seekable.fraction)
+                coroutineScope {
+                    val follow = launch { snapshotFlow { fraction.value }.collect { seekable.seekTo(it, below) } }
+                    fraction.animateTo(0f, settle)
+                    follow.cancel()
+                }
+                seekable.snapTo(current)
+            }
             throw e
         }
     }
