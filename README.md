@@ -3,7 +3,9 @@
 [![CI](https://github.com/DanCommitsGit/friendar/actions/workflows/ci.yml/badge.svg)](https://github.com/DanCommitsGit/friendar/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/DanCommitsGit/friendar)](https://github.com/DanCommitsGit/friendar/releases/latest)
 
-Friendar points you at a friend's phone when you are both nearby. Open the app on two phones, tap Find, and follow the arrow.
+Friend radar for Android. Follow the arrow to the friend you're looking for.
+
+Friendar points you at a friend's phone when you are both nearby, using ultra-wideband (UWB) with Bluetooth, Wi-Fi Aware and GPS as fallbacks. Open the app on two phones, tap Find, and follow the arrow.
 
 ## Install
 
