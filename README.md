@@ -20,7 +20,7 @@ There is no pairing or encryption. Any phone nearby running Friendar with the ap
 ./gradlew testDebugUnitTest
 ```
 
-You need JDK 17 and the Android SDK with platform 36 and build tools 35.0.0. The APK is written to `app/build/outputs/apk/debug/`.
+You need JDK 21 and the Android SDK with platform 36 and build tools 35.0.0. The APK is written to `app/build/outputs/apk/debug/`.
 
 ## Docs
 
