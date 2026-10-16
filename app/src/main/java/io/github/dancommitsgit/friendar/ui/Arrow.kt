@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 
@@ -21,6 +20,5 @@ internal fun Arrow(angleDeg: Float, color: Color, modifier: Modifier = Modifier)
             close()
         }
         drawPath(path, color)
-        drawCircle(Color.White.copy(alpha = 0.25f), radius = 6f, center = Offset(w / 2, h * 0.7f))
     }
 }

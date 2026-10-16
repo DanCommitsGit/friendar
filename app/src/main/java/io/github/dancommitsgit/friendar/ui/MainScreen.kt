@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -36,8 +37,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
@@ -101,8 +102,12 @@ internal fun MainScreen(
             .systemBarsPadding()
             .padding(horizontal = 24.dp),
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.End) {
-            IconButton(onClick = onSettings) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            // The 48dp touch target leaves the 40dp container 4dp inside the content margin.
+            FilledTonalIconButton(onClick = onSettings, modifier = Modifier.offset(x = 4.dp)) {
                 Icon(AppIcons.Settings, contentDescription = stringResource(R.string.settings))
             }
         }

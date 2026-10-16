@@ -411,7 +411,7 @@ private fun SettingsContent(
                 SwitchRow(
                     it,
                     title = stringResource(R.string.setting_background),
-                    detail = stringResource(R.string.setting_background_detail),
+                    detail = null,
                     checked = state.background,
                     onChange = onBackground,
                 )

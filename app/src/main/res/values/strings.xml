@@ -4,7 +4,7 @@
 
     <string name="home_find">Find my friend</string>
     <string name="permission_needed">Friendar needs the Nearby devices permission to find your friend.</string>
-    <string name="open_settings">Open settings</string>
+    <string name="open_settings">Open app settings</string>
 
     <string name="status_looking">Looking for your friend</string>
     <string name="status_measuring">Measuring</string>
@@ -40,7 +40,6 @@
     <string name="settings">Settings</string>
     <string name="back">Back</string>
     <string name="setting_background">Continue running in the background</string>
-    <string name="setting_background_detail">Continue running when you leave the app</string>
     <string name="setting_flip">Flip arrow</string>
     <string name="setting_flip_detail">Some phones swap left and right. Auto detection: %1$s</string>
     <string name="flip_yes">Yes</string>
