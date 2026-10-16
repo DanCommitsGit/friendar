@@ -61,6 +61,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -79,6 +80,10 @@ import io.github.dancommitsgit.friendar.finder.FinderState
 import io.github.dancommitsgit.friendar.finder.FlipMode
 import io.github.dancommitsgit.friendar.finder.ThemeMode
 import io.github.dancommitsgit.friendar.R
+import io.github.dancommitsgit.friendar.update.Release
+import io.github.dancommitsgit.friendar.update.UpdateStatus
+import io.github.dancommitsgit.friendar.update.checkForUpdate
+import kotlinx.coroutines.launch
 
 internal fun openAppSettings(context: Context) {
     context.startActivity(
@@ -88,6 +93,9 @@ internal fun openAppSettings(context: Context) {
         ),
     )
 }
+
+private fun installedVersion(context: Context): String =
+    context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
 
 private enum class FeatureState { Supported, Missing, Off }
 
@@ -374,11 +382,23 @@ internal fun SettingsScreen(
     val missingPermissions = remember(resumed) {
         permissionGroups.filter { !it.allowed(context) }.map { context.getString(it.label) }
     }
+    val version = remember { installedVersion(context) }
+    var update by remember { mutableStateOf<UpdateStatus>(UpdateStatus.Idle) }
+    val scope = rememberCoroutineScope()
     SettingsContent(
         state = state,
         featuresAvailable = features.count { it.state != FeatureState.Missing },
         featuresTotal = features.size,
         missingPermissions = missingPermissions,
+        version = version,
+        update = update,
+        onCheckUpdate = {
+            update = UpdateStatus.Checking
+            scope.launch { update = checkForUpdate(version) }
+        },
+        onOpenRelease = { release ->
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.url)))
+        },
         onBack = onBack,
         onFlip = onFlip,
         onUnits = onUnits,
@@ -396,6 +416,10 @@ private fun SettingsContent(
     featuresAvailable: Int,
     featuresTotal: Int,
     missingPermissions: List<String>,
+    version: String,
+    update: UpdateStatus,
+    onCheckUpdate: () -> Unit,
+    onOpenRelease: (Release) -> Unit,
     onBack: () -> Unit,
     onFlip: (FlipMode) -> Unit,
     onUnits: (Boolean) -> Unit,
@@ -494,6 +518,26 @@ private fun SettingsContent(
             }
         }
         Group {
+            row {
+                val release = (update as? UpdateStatus.Available)?.release
+                SegmentedListItem(
+                    onClick = { if (release != null) onOpenRelease(release) else onCheckUpdate() },
+                    enabled = update != UpdateStatus.Checking,
+                    shapes = it,
+                    colors = rowColors(),
+                    supportingContent = {
+                        Text(
+                            when (update) {
+                                UpdateStatus.Idle -> stringResource(R.string.version, version)
+                                UpdateStatus.Checking -> stringResource(R.string.update_checking)
+                                UpdateStatus.UpToDate -> stringResource(R.string.update_up_to_date, version)
+                                is UpdateStatus.Available -> stringResource(R.string.update_available, update.release.version)
+                                UpdateStatus.Failed -> stringResource(R.string.update_failed)
+                            },
+                        )
+                    },
+                ) { Text(stringResource(R.string.check_for_updates)) }
+            }
             row {
                 SwitchRow(
                     it,
@@ -646,12 +690,17 @@ private fun PermissionsContent(
 @Composable
 private fun SettingsPreview() {
     var state by remember { mutableStateOf(FinderState()) }
+    var update by remember { mutableStateOf<UpdateStatus>(UpdateStatus.Available(Release("1.3.0", ""))) }
     PreviewTheme(state.themeMode) {
         SettingsContent(
             state = state,
             featuresAvailable = 5,
             featuresTotal = 6,
             missingPermissions = listOf("Nearby devices"),
+            version = "1.2.3",
+            update = update,
+            onCheckUpdate = { update = UpdateStatus.UpToDate },
+            onOpenRelease = {},
             onBack = {},
             onFlip = { state = state.copy(flipMode = it) },
             onUnits = { state = state.copy(metric = it) },

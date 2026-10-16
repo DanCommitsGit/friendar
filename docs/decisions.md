@@ -10,6 +10,10 @@ Any Friendar phone in range with the app open can link. The app is for two frien
 
 There is no account and no server, and nothing the search needs is fetched online. An online extra such as map tiles must be optional and leave the search unchanged when it is unavailable.
 
+## Updates are checked by hand and installed through the browser
+
+Settings has a Check for updates row that asks the GitHub API for the latest release and compares its tag with the installed version name. It is the only use of `INTERNET`, and nothing runs until the row is tapped, so the search and the rest of the app stay offline. An available update opens the release page in the browser; the app does not download or install the APK itself, which would need the install-packages permission. Prereleases are ignored, since `/releases/latest` skips them. Local builds report version 1.0, so they always see any release as newer.
+
 ## Roles come from a random nonce
 
 Both phones advertise and scan at once, and the one with the lower nonce connects. A fixed or user-chosen role would mean one person has to tap a different button than the other.
