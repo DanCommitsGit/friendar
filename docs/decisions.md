@@ -6,6 +6,10 @@ Short notes on choices that can't be read from the code. Add a new entry when a 
 
 Any Friendar phone in range with the app open can link. The app is for two friends in the same building and carries nothing sensitive beyond a GPS position, so a pairing flow was judged not worth its complexity. Do not add one unless asked.
 
+## The app works without an internet connection
+
+There is no account and no server, and nothing the search needs is fetched online. An online extra such as map tiles must be optional and leave the search unchanged when it is unavailable.
+
 ## Roles come from a random nonce
 
 Both phones advertise and scan at once, and the one with the lower nonce connects. A fixed or user-chosen role would mean one person has to tap a different button than the other.
