@@ -25,18 +25,12 @@ class FinderRulesTest {
     }
 
     @Test
-    fun explicitUnitModesIgnoreTheCountry() {
-        assertTrue(metricFor(UnitMode.Metric, country = "US"))
-        assertFalse(metricFor(UnitMode.Imperial, country = "DE"))
-    }
-
-    @Test
-    fun autoUnitsAreImperialOnlyWhereFeetAreUsed() {
-        assertFalse(metricFor(UnitMode.Auto, country = "US"))
-        assertFalse(metricFor(UnitMode.Auto, country = "LR"))
-        assertFalse(metricFor(UnitMode.Auto, country = "MM"))
-        assertTrue(metricFor(UnitMode.Auto, country = "GB"))
-        assertTrue(metricFor(UnitMode.Auto, country = ""))
+    fun defaultUnitsAreImperialOnlyWhereFeetAreUsed() {
+        assertFalse(defaultMetric(country = "US"))
+        assertFalse(defaultMetric(country = "LR"))
+        assertFalse(defaultMetric(country = "MM"))
+        assertTrue(defaultMetric(country = "GB"))
+        assertTrue(defaultMetric(country = ""))
     }
 
     @Test

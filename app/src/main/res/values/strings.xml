@@ -50,11 +50,8 @@
     <string name="flip_detected_normal">not flipped</string>
     <string name="flip_detected_unknown">none yet</string>
     <string name="setting_units">Units</string>
-    <string name="units_auto">Auto</string>
     <string name="units_metric">Metric</string>
     <string name="units_imperial">Imperial</string>
-    <string name="units_auto_metric">Your phone uses meters</string>
-    <string name="units_auto_imperial">Your phone uses feet</string>
     <string name="setting_theme">Theme</string>
     <string name="theme_system">System</string>
     <string name="theme_light">Light</string>

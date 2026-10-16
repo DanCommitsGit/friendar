@@ -128,13 +128,10 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         _state.update { it.copy(flipMode = mode, mirror = mirror) }
     }
 
-    fun setUnitMode(mode: UnitMode) {
-        prefs.edit().putString(PREF_UNITS, mode.name).apply()
-        _state.update { it.copy(unitMode = mode, metric = metricFor(mode)) }
+    fun setMetric(value: Boolean) {
+        prefs.edit().putString(PREF_UNITS, if (value) UNITS_METRIC else UNITS_IMPERIAL).apply()
+        _state.update { it.copy(metric = value) }
     }
-
-    /** Sets the unit explicitly, as when the distance readout is tapped. */
-    fun setMetric(value: Boolean) = setUnitMode(if (value) UnitMode.Metric else UnitMode.Imperial)
 
     fun setThemeMode(mode: ThemeMode) {
         prefs.edit().putString(PREF_THEME, mode.name).apply()
@@ -161,15 +158,18 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
 
     private fun freshState(phase: Phase = Phase.Idle): FinderState {
         val flipMode = enumPref(PREF_FLIP, FlipMode.Auto)
-        val unitMode = enumPref(PREF_UNITS, UnitMode.Auto)
+        val metric = when (prefs.getString(PREF_UNITS, null)) {
+            UNITS_METRIC -> true
+            UNITS_IMPERIAL -> false
+            else -> defaultMetric()
+        }
         val learned = if (prefs.contains(PREF_FLIP_LEARNED)) prefs.getBoolean(PREF_FLIP_LEARNED, true) else null
         return FinderState(
             phase = phase,
             flipMode = flipMode,
             flipAuto = learned,
             mirror = mirrorFor(flipMode, learned),
-            unitMode = unitMode,
-            metric = metricFor(unitMode),
+            metric = metric,
             themeMode = enumPref(PREF_THEME, ThemeMode.System),
             background = prefs.getBoolean(PREF_BACKGROUND, true),
             debug = prefs.getBoolean(PREF_DEBUG, false),
@@ -537,6 +537,8 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         const val PREF_FLIP = "flip"
         const val PREF_FLIP_LEARNED = "flip_learned"
         const val PREF_UNITS = "units"
+        const val UNITS_METRIC = "Metric"
+        const val UNITS_IMPERIAL = "Imperial"
         const val PREF_THEME = "theme"
         const val PREF_BACKGROUND = "background"
         const val PREF_DEBUG = "debug"

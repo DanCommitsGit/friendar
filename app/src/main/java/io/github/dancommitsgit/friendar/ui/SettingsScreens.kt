@@ -79,7 +79,6 @@ import androidx.lifecycle.Lifecycle
 import io.github.dancommitsgit.friendar.finder.FinderState
 import io.github.dancommitsgit.friendar.finder.FlipMode
 import io.github.dancommitsgit.friendar.finder.ThemeMode
-import io.github.dancommitsgit.friendar.finder.UnitMode
 import io.github.dancommitsgit.friendar.R
 
 internal fun openAppSettings(context: Context) {
@@ -369,7 +368,7 @@ internal fun SettingsScreen(
     state: FinderState,
     onBack: () -> Unit,
     onFlip: (FlipMode) -> Unit,
-    onUnits: (UnitMode) -> Unit,
+    onUnits: (Boolean) -> Unit,
     onTheme: (ThemeMode) -> Unit,
     onBackground: (Boolean) -> Unit,
     onDebug: (Boolean) -> Unit,
@@ -406,7 +405,7 @@ private fun SettingsContent(
     missingPermissions: List<String>,
     onBack: () -> Unit,
     onFlip: (FlipMode) -> Unit,
-    onUnits: (UnitMode) -> Unit,
+    onUnits: (Boolean) -> Unit,
     onTheme: (ThemeMode) -> Unit,
     onBackground: (Boolean) -> Unit,
     onDebug: (Boolean) -> Unit,
@@ -451,17 +450,12 @@ private fun SettingsContent(
                 ChoiceRow(
                     it,
                     title = stringResource(R.string.setting_units),
-                    detail = if (state.unitMode == UnitMode.Auto) {
-                        stringResource(if (state.metric) R.string.units_auto_metric else R.string.units_auto_imperial)
-                    } else {
-                        null
-                    },
+                    detail = null,
                     options = listOf(
-                        stringResource(R.string.units_auto) to UnitMode.Auto,
-                        stringResource(R.string.units_metric) to UnitMode.Metric,
-                        stringResource(R.string.units_imperial) to UnitMode.Imperial,
+                        stringResource(R.string.units_metric) to true,
+                        stringResource(R.string.units_imperial) to false,
                     ),
-                    selected = state.unitMode,
+                    selected = state.metric,
                     onSelect = onUnits,
                 )
             }
@@ -669,7 +663,7 @@ private fun SettingsPreview() {
             missingPermissions = listOf("Nearby devices"),
             onBack = {},
             onFlip = { state = state.copy(flipMode = it) },
-            onUnits = { state = state.copy(unitMode = it, metric = it != UnitMode.Imperial) },
+            onUnits = { state = state.copy(metric = it) },
             onTheme = { state = state.copy(themeMode = it) },
             onBackground = { state = state.copy(background = it) },
             onDebug = { state = state.copy(debug = it) },
