@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
@@ -18,6 +19,7 @@ class LocatorService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        starting = false
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
             NotificationChannel(
@@ -50,11 +52,32 @@ class LocatorService : Service() {
         } catch (_: RuntimeException) {
             stopSelf()
         }
+        // Stopped while this start was still queued.
+        if (!wanted) stopSelf()
         return START_NOT_STICKY
     }
 
-    private companion object {
-        const val CHANNEL_ID = "searching"
-        const val NOTIFICATION_ID = 1
+    companion object {
+        private const val CHANNEL_ID = "searching"
+        private const val NOTIFICATION_ID = 1
+
+        // Main thread only. Calling stopService before a started service has called startForeground crashes the app.
+        private var wanted = false
+        private var starting = false
+
+        fun start(context: Context) {
+            wanted = true
+            if (starting) return
+            starting = true
+            val component = runCatching {
+                context.startForegroundService(Intent(context, LocatorService::class.java))
+            }.getOrNull()
+            if (component == null) starting = false
+        }
+
+        fun stop(context: Context) {
+            wanted = false
+            if (!starting) context.stopService(Intent(context, LocatorService::class.java))
+        }
     }
 }

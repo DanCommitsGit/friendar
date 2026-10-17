@@ -2,13 +2,11 @@ package io.github.dancommitsgit.friendar.finder
 
 import android.app.Application
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.GeomagneticField
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
-import androidx.core.content.ContextCompat
 import androidx.core.uwb.RangingPosition
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -199,17 +197,9 @@ class FinderViewModel(app: Application) : AndroidViewModel(app), LinkListener, A
         _state.value = freshState()
     }
 
-    private fun startService() {
-        val app = getApplication<Application>()
-        runCatching {
-            ContextCompat.startForegroundService(app, Intent(app, LocatorService::class.java))
-        }
-    }
+    private fun startService() = LocatorService.start(getApplication())
 
-    private fun stopService() {
-        val app = getApplication<Application>()
-        app.stopService(Intent(app, LocatorService::class.java))
-    }
+    private fun stopService() = LocatorService.stop(getApplication())
 
     override fun onCleared() {
         stop()
